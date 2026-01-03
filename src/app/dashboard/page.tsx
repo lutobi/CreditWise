@@ -153,7 +153,7 @@ export default function Dashboard() {
                                     ? `Verified at ${verification.employer_name}`
                                     : "Please complete your profile to verify employment."}
                             </p>
-                            <Button variant="outline" size="sm" className="w-full">Update Details</Button>
+                            <Button variant="outline" size="sm" className="w-full" onClick={() => router.push('/apply')}>Update Details</Button>
                         </CardContent>
                     </Card>
 
@@ -178,7 +178,7 @@ export default function Dashboard() {
                                     <p className="text-xs text-muted-foreground">
                                         Applied on {new Date(activeLoan.created_at).toLocaleDateString()}
                                     </p>
-                                    <Button className="w-full" variant="outline">View Details</Button>
+                                    <Button className="w-full" variant="outline" onClick={() => router.push(`/loans/${activeLoan.id}`)}>View Details</Button>
                                 </div>
                             ) : (
                                 <div className="flex flex-col gap-4">

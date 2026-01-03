@@ -23,24 +23,24 @@ export function Footer() {
                     <div>
                         <h3 className="mb-2 text-sm font-semibold">Products</h3>
                         <ul className="space-y-2 text-sm text-muted-foreground">
-                            <li><Link href="#" className="hover:text-primary">Personal Loans</Link></li>
-                            <li><Link href="#" className="hover:text-primary">Payday Loans</Link></li>
-                            <li><Link href="#" className="hover:text-primary">Credit Check</Link></li>
+                            <li><Link href="/apply" className="hover:text-primary">Personal Loans</Link></li>
+                            <li><Link href="/apply" className="hover:text-primary">Payday Loans</Link></li>
+                            <li><Link href="/dashboard" className="hover:text-primary">Credit Check</Link></li>
                         </ul>
                     </div>
                     <div>
                         <h3 className="mb-2 text-sm font-semibold">Company</h3>
                         <ul className="space-y-2 text-sm text-muted-foreground">
-                            <li><Link href="#" className="hover:text-primary">About Us</Link></li>
-                            <li><Link href="#" className="hover:text-primary">Careers</Link></li>
-                            <li><Link href="#" className="hover:text-primary">Contact</Link></li>
+                            <li><Link href="/" className="hover:text-primary">About Us</Link></li>
+                            <li><Link href="/" className="hover:text-primary">Careers</Link></li>
+                            <li><Link href="/" className="hover:text-primary">Contact</Link></li>
                         </ul>
                     </div>
                     <div>
                         <h3 className="mb-2 text-sm font-semibold">Legal</h3>
                         <ul className="space-y-2 text-sm text-muted-foreground">
-                            <li><Link href="#" className="hover:text-primary">Terms of Service</Link></li>
-                            <li><Link href="#" className="hover:text-primary">Privacy Policy</Link></li>
+                            <li><Link href="/" className="hover:text-primary">Terms of Service</Link></li>
+                            <li><Link href="/" className="hover:text-primary">Privacy Policy</Link></li>
                         </ul>
                     </div>
                 </div>

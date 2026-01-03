@@ -12,6 +12,7 @@ import { Spinner } from "@/components/ui/spinner"
 import { useAuth } from "@/components/auth-provider"
 import { supabase } from "@/lib/supabase"
 import { personalDetailsSchema, employmentDetailsSchema, loanDetailsSchema, documentUploadSchema } from "@/lib/validation"
+import { LiveSelfie } from "@/components/ui/live-selfie"
 import { toast } from "sonner"
 
 export default function ApplyPage() {
@@ -34,7 +35,8 @@ export default function ApplyPage() {
         loanAmount: 5000,
         repaymentPeriod: 6,
         idDocument: "",
-        payslip: ""
+        payslip: "",
+        selfie: ""
     })
 
     React.useEffect(() => {
@@ -96,6 +98,38 @@ export default function ApplyPage() {
         }
     }
 
+    const handleSelfieCapture = async (file: File | null) => {
+        if (!file) return;
+        if (!user) {
+            toast.error("Please login to upload selfie");
+            return;
+        }
+
+        setUploading('selfie');
+        try {
+            const fileName = `${user.id}/selfie-${Date.now()}.jpg`;
+
+            // Upload to 'documents' bucket (reusing existing bucket)
+            const { error: uploadError } = await supabase.storage
+                .from('documents')
+                .upload(fileName, file);
+
+            if (uploadError) throw uploadError;
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('documents')
+                .getPublicUrl(fileName);
+
+            updateField('selfie', publicUrl);
+            toast.success("Selfie verified and uploaded");
+        } catch (error: any) {
+            console.error('Selfie upload error:', error);
+            toast.error("Selfie upload failed: " + error.message);
+        } finally {
+            setUploading(null);
+        }
+    }
+
     const validateStep = () => {
         console.log('🔍 Validating step:', step);
         setErrors({})
@@ -142,6 +176,24 @@ export default function ApplyPage() {
                 return
             }
 
+            // 0. Ensure Profile Exists (Fix for FK Error)
+            const { error: profileError } = await supabase
+                .from('profiles')
+                .upsert({
+                    id: user.id,
+                    full_name: `${formData.firstName} ${formData.lastName}`.trim(),
+                    national_id: formData.nationalId,
+                    phone_number: formData.phone,
+                    updated_at: new Date().toISOString()
+                })
+
+            if (profileError) {
+                console.error("Error updating profile:", profileError)
+                // We don't block here strictly, but it likely causes next step to fail
+                // if it didn't exist.
+                throw new Error("Failed to update profile: " + profileError.message)
+            }
+
             // 1. Update Profile/Verification info
             let verifError = null;
             const { error: insertError } = await supabase
@@ -150,6 +202,8 @@ export default function ApplyPage() {
                     user_id: user.id,
                     employer_name: formData.employerName,
                     monthly_income: parseFloat(formData.monthlyIncome),
+                    is_employed: false,
+                    employment_type: formData.employmentType
                 });
 
             if (insertError) {
@@ -159,6 +213,8 @@ export default function ApplyPage() {
                         .update({
                             employer_name: formData.employerName,
                             monthly_income: parseFloat(formData.monthlyIncome),
+                            is_employed: false,
+                            employment_type: formData.employmentType
                         })
                         .eq('user_id', user.id);
                     verifError = updateError;
@@ -187,7 +243,8 @@ export default function ApplyPage() {
                     status: 'pending',
                     documents: {
                         id_url: formData.idDocument,
-                        payslip_url: formData.payslip
+                        payslip_url: formData.payslip,
+                        selfie_url: formData.selfie
                     }
                 })
 
@@ -299,6 +356,7 @@ export default function ApplyPage() {
                             {step === 3 && (
                                 <div className="space-y-6">
                                     <div className="space-y-4">
+                                        {/* ID Document - Standard Upload */}
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium">ID Document (Scan/Photo)</label>
                                             <div className="flex items-center gap-4">
@@ -318,6 +376,37 @@ export default function ApplyPage() {
                                             {errors.idDocument && <p className="text-xs text-red-500">{errors.idDocument}</p>}
                                         </div>
 
+                                        {/* Live Selfie - Webcam Capture */}
+                                        <div className="space-y-2">
+                                            <label className="text-sm font-medium">Live Selfie (Liveness Check)</label>
+                                            <div className="rounded-lg border p-4 bg-muted/50">
+                                                {!formData.selfie ? (
+                                                    <LiveSelfie
+                                                        onCapture={(file) => handleSelfieCapture(file)}
+                                                        error={errors.selfie}
+                                                    />
+                                                ) : (
+                                                    <div className="text-center space-y-4">
+                                                        <div className="aspect-square w-64 mx-auto rounded-lg overflow-hidden border-2 border-green-500">
+                                                            <img src={formData.selfie} alt="Your selfie" className="w-full h-full object-cover" />
+                                                        </div>
+                                                        <div className="flex justify-center gap-4">
+                                                            <div className="flex items-center text-green-600 font-medium">
+                                                                <CheckCircle2 className="mr-2 h-5 w-5" />
+                                                                Selfie Captured
+                                                            </div>
+                                                            <Button type="button" variant="outline" size="sm" onClick={() => updateField('selfie', '')}>
+                                                                Retake
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                {uploading === 'selfie' && <div className="text-center text-xs text-muted-foreground mt-2">Uploading selfie...</div>}
+                                            </div>
+                                            {errors.selfie && <p className="text-xs text-red-500">{errors.selfie}</p>}
+                                        </div>
+
+                                        {/* Payslip - Standard Upload */}
                                         <div className="space-y-2">
                                             <label className="text-sm font-medium">Latest Payslip</label>
                                             <div className="flex items-center gap-4">

@@ -1,0 +1,252 @@
+[dotenv@17.2.3] injecting env (3) from .env.local -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+[1A[2K[2m[WebServer] [22m[33m[1m⚠[22m[39m Warning: Next.js inferred your workspace root, but it may not be correct.
+[2m[WebServer] [22m We detected multiple lockfiles and selected the directory of /Users/olutobi/package-lock.json as the root directory.
+[2m[WebServer] [22m To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+[2m[WebServer] [22m   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+[2m[WebServer] [22m Detected additional lockfiles: 
+[2m[WebServer] [22m   * /Users/olutobi/.gemini/antigravity/playground/nomad-pinwheel/package-lock.json
+[2m[WebServer] [22m
+
+
+Running 2 tests using 2 workers
+
+[1A[2K[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ⚙️  enable debug logging with { debug: true }
+
+[1A[2K[dotenv@17.2.3] injecting env (0) from .env.local -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+
+[1A[2K[1/2] [chromium] › tests/e2e/live-full-flow.spec.ts:211:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should allow ADMIN to verify user and approve loan
+[1A[2K[2/2] [chromium] › tests/e2e/live-full-flow.spec.ts:26:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should complete full flow with PRE-VERIFIED user
+[1A[2K[chromium] › tests/e2e/live-full-flow.spec.ts:26:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should complete full flow with PRE-VERIFIED user
+TEST: Creating verified user: robot.verified.1766582419393@example.com
+
+[1A[2KTEST: Verified User Created Successfully.
+
+[1A[2KBROWSER: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+
+[1A[2KBROWSER: [HMR] connected
+
+[1A[2KBROWSER: [Fast Refresh] rebuilding
+
+[1A[2KBROWSER: [Fast Refresh] done in 115ms
+
+[1A[2K[chromium] › tests/e2e/live-full-flow.spec.ts:211:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should allow ADMIN to verify user and approve loan
+TEST: Created Regular User (user.1766582419397@example.com) and Admin User (admin.1766582419397@example.com)
+
+[1A[2KBROWSER: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+
+[1A[2KBROWSER: [HMR] connected
+
+[1A[2K[chromium] › tests/e2e/live-full-flow.spec.ts:26:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should complete full flow with PRE-VERIFIED user
+TEST: Profile created manually for ID: 9e3f5dc1-4279-4126-b562-4ae30d485f10
+
+[1A[2K[chromium] › tests/e2e/live-full-flow.spec.ts:211:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should allow ADMIN to verify user and approve loan
+REQ POST https://oqufncrgcdevqeiglmgj.supabase.co/auth/v1/token?grant_type=password: {"email":"admin.1766582419397@example.com","password":"Password123!","gotrue_meta_security":{}}
+
+[1A[2K[chromium] › tests/e2e/live-full-flow.spec.ts:26:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should complete full flow with PRE-VERIFIED user
+TEST: Profile confirmed in DB: 9e3f5dc1-4279-4126-b562-4ae30d485f10
+
+[1A[2KTEST: Logging in...
+
+[1A[2KBROWSER: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+
+[1A[2KBROWSER: [HMR] connected
+
+[1A[2KREQ POST https://oqufncrgcdevqeiglmgj.supabase.co/auth/v1/token?grant_type=password: {"email":"robot.verified.1766582419393@example.com","password":"Password123!","gotrue_meta_security":{}}
+
+[1A[2K[chromium] › tests/e2e/live-full-flow.spec.ts:211:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should allow ADMIN to verify user and approve loan
+TEST: Admin navigating to portal...
+
+[1A[2KREQ GET https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/verifications?select=*&user_id=eq.ab652ade-6976-4050-89e5-84d6204a5d0b
+
+[1A[2KREQ GET https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/verifications?select=*&user_id=eq.ab652ade-6976-4050-89e5-84d6204a5d0b
+
+[1A[2KREQ FAILED: https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/verifications?select=*&user_id=eq.ab652ade-6976-4050-89e5-84d6204a5d0b - net::ERR_ABORTED
+
+[1A[2KREQ FAILED: https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/verifications?select=*&user_id=eq.ab652ade-6976-4050-89e5-84d6204a5d0b - net::ERR_ABORTED
+
+[1A[2KBROWSER: Error fetching verification: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch
+    at http://localhost…ayground_nomad-pinwheel_src_602d7ed1._.js:989:60), hint: , code: }
+
+[1A[2KBROWSER: Error fetching verification: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch
+    at http://localhost…ayground_nomad-pinwheel_src_602d7ed1._.js:989:60), hint: , code: }
+
+[1A[2KBROWSER: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+
+[1A[2KBROWSER: [HMR] connected
+
+[1A[2KREQ GET https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/loans?select=*%2Cprofiles%28full_name%2Cnational_id%29&status=eq.pending&order=created_at.desc
+
+[1A[2KREQ GET https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/loans?select=*%2Cprofiles%28full_name%2Cnational_id%29&status=eq.pending&order=created_at.desc
+
+[1A[2K[chromium] › tests/e2e/live-full-flow.spec.ts:26:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should complete full flow with PRE-VERIFIED user
+REQ FAILED: http://localhost:3000/dashboard?_rsc=a1vt3 - net::ERR_ABORTED
+
+[1A[2KTEST: Login Successful! On Dashboard.
+
+[1A[2KREQ GET https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/verifications?select=*&user_id=eq.9e3f5dc1-4279-4126-b562-4ae30d485f10
+
+[1A[2KREQ GET https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/verifications?select=*&user_id=eq.9e3f5dc1-4279-4126-b562-4ae30d485f10
+
+[1A[2K[chromium] › tests/e2e/live-full-flow.spec.ts:211:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should allow ADMIN to verify user and approve loan
+REQ GET https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/verifications?select=*%2Cprofiles%28full_name%29&is_employed=eq.false&employer_name=not.is.null
+
+[1A[2KREQ GET https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/verifications?select=*%2Cprofiles%28full_name%29&is_employed=eq.false&employer_name=not.is.null
+
+[1A[2K[chromium] › tests/e2e/live-full-flow.spec.ts:26:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should complete full flow with PRE-VERIFIED user
+REQ GET https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/loans?select=*&user_id=eq.9e3f5dc1-4279-4126-b562-4ae30d485f10&order=created_at.desc&limit=1
+
+[1A[2KREQ GET https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/loans?select=*&user_id=eq.9e3f5dc1-4279-4126-b562-4ae30d485f10&order=created_at.desc&limit=1
+
+[1A[2K[chromium] › tests/e2e/live-full-flow.spec.ts:211:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should allow ADMIN to verify user and approve loan
+BROWSER: [Fast Refresh] rebuilding
+
+[1A[2KBROWSER: [Fast Refresh] done in 102ms
+
+[1A[2K[chromium] › tests/e2e/live-full-flow.spec.ts:26:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should complete full flow with PRE-VERIFIED user
+BROWSER: [Fast Refresh] rebuilding
+
+[1A[2KBROWSER: [Fast Refresh] done in 102ms
+
+[1A[2KTEST: Starting Application...
+
+[1A[2KBROWSER: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+
+[1A[2KBROWSER: [HMR] connected
+
+[1A[2KBROWSER: 🔍 Validating step: 1
+
+[1A[2KBROWSER: 🔍 Validating step: 2
+
+[1A[2KTEST: Uploading REAL files to Storage...
+
+[1A[2KREQ POST https://oqufncrgcdevqeiglmgj.supabase.co/storage/v1/object/documents/9e3f5dc1-4279-4126-b562-4ae30d485f10/idDocument-1766582425649.jpg: [1mnull[22m
+
+[1A[2K[chromium] › tests/e2e/live-full-flow.spec.ts:211:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should allow ADMIN to verify user and approve loan
+BROWSER: Failed to load resource: the server responded with a status of 401 (Unauthorized)
+
+[1A[2K[chromium] › tests/e2e/live-full-flow.spec.ts:26:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should complete full flow with PRE-VERIFIED user
+REQ POST https://oqufncrgcdevqeiglmgj.supabase.co/storage/v1/object/documents/9e3f5dc1-4279-4126-b562-4ae30d485f10/payslip-1766582426661.pdf: [1mnull[22m
+
+[1A[2KTEST: Real Documents Uploaded Successfully!
+
+[1A[2KTEST: Capturing Live Selfie...
+
+[1A[2KREQ POST https://oqufncrgcdevqeiglmgj.supabase.co/storage/v1/object/documents/9e3f5dc1-4279-4126-b562-4ae30d485f10/selfie-1766582427571.jpg: [1mnull[22m
+
+[1A[2KREQ GET https://oqufncrgcdevqeiglmgj.supabase.co/storage/v1/object/public/documents/9e3f5dc1-4279-4126-b562-4ae30d485f10/selfie-1766582427571.jpg
+
+[1A[2KTEST: Selfie Captured Successfully!
+
+[1A[2KBROWSER: 🔍 Validating step: 3
+
+[1A[2KBROWSER: 🔍 Validating step: 4
+
+[1A[2KTEST: Submitting Application to Real DB...
+
+[1A[2KREQ POST https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/verifications: {"user_id":"9e3f5dc1-4279-4126-b562-4ae30d485f10","employer_name":"Tech Corp","monthly_income":25000,"is_employed":false,"employment_type":"Full-time Permanent"}
+
+[1A[2KREQ POST https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/loans: {"user_id":"9e3f5dc1-4279-4126-b562-4ae30d485f10","amount":10000,"duration_months":12,"monthly_payment":933.3333333333335,"status":"pending","documents":{"id_url":"https://oqufncrgcdevqeiglmgj.supabase.co/storage/v1/object/public/documents/9e3f5dc1-4279-4126-b562-4ae30d485f10/idDocument-1766582425649.jpg","payslip_url":"https://oqufncrgcdevqeiglmgj.supabase.co/storage/v1/object/public/documents/9e3f5dc1-4279-4126-b562-4ae30d485f10/payslip-1766582426661.pdf","selfie_url":"https://oqufncrgcdevqeiglmgj.supabase.co/storage/v1/object/public/documents/9e3f5dc1-4279-4126-b562-4ae30d485f10/selfie-1766582427571.jpg"}}
+
+[1A[2KREQ FAILED: https://oqufncrgcdevqeiglmgj.supabase.co/storage/v1/object/public/documents/9e3f5dc1-4279-4126-b562-4ae30d485f10/selfie-1766582427571.jpg - net::ERR_BLOCKED_BY_ORB
+
+[1A[2KTEST: Live Application Submitted Successfully!
+
+[1A[2KTEST: Live Application Submitted Successfully!
+
+[1A[2KTEST: Navigating back to User Dashboard to verify Real Data Connection...
+
+[1A[2KBROWSER: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+
+[1A[2KBROWSER: [HMR] connected
+
+[1A[2KREQ GET https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/verifications?select=*&user_id=eq.9e3f5dc1-4279-4126-b562-4ae30d485f10
+
+[1A[2KREQ GET https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/loans?select=*&user_id=eq.9e3f5dc1-4279-4126-b562-4ae30d485f10&order=created_at.desc&limit=1
+
+[1A[2KTEST: Checking for Active Loan card...
+
+[1A[2KTEST: User Dashboard Verified with Real Data.
+
+[1A[2KTEST: Logging out...
+
+[1A[2KREQ POST https://oqufncrgcdevqeiglmgj.supabase.co/auth/v1/logout?scope=global: [1mnull[22m
+
+[1A[2KREQ FAILED: https://oqufncrgcdevqeiglmgj.supabase.co/auth/v1/logout?scope=global - net::ERR_ABORTED
+
+[1A[2KREQ FAILED: http://localhost:3000/login?_rsc=1h1b5 - net::ERR_ABORTED
+
+[1A[2K  1) [chromium] › tests/e2e/live-full-flow.spec.ts:211:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should allow ADMIN to verify user and approve loan 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeHidden[2m([22m[2m)[22m failed
+
+    Locator:  locator('text=Regular Applicant 1766582419397')
+    Expected: hidden
+    Received: visible
+    Timeout:  10000ms
+
+    Call log:
+    [2m  - Expect "toBeHidden" with timeout 10000ms[22m
+    [2m  - waiting for locator('text=Regular Applicant 1766582419397')[22m
+    [2m    14 × locator resolved to <h3 class="font-semibold tracking-tight text-base">Regular Applicant 1766582419397</h3>[22m
+    [2m       - unexpected value "visible"[22m
+
+
+      286 |         // 6. Handle Alert/Confirmation
+      287 |         // ideally the UI updates "Pending" to "Verified" or removes it from the list.
+    > 288 |         await expect(page.locator(`text=${uniqueName}`)).toBeHidden({ timeout: 10000 });
+          |                                                          ^
+      289 |
+      290 |         console.log('TEST: Applicant removed from pending list -> Verification Success.');
+      291 |
+        at /Users/olutobi/.gemini/antigravity/playground/nomad-pinwheel/tests/e2e/live-full-flow.spec.ts:288:58
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/live-full-flow-LIVE-Full-U-c1dff-erify-user-and-approve-loan-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/live-full-flow-LIVE-Full-U-c1dff-erify-user-and-approve-loan-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/live-full-flow-LIVE-Full-U-c1dff-erify-user-and-approve-loan-chromium/error-context.md
+
+
+[1A[2K  2) [chromium] › tests/e2e/live-full-flow.spec.ts:26:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should complete full flow with PRE-VERIFIED user 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: locator('text=Log In')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('text=Log In')[22m
+
+
+      200 |         await page.click('button:has-text("Sign Out")');
+      201 |         // Wait for redirect to login or home
+    > 202 |         await expect(page.locator('text=Log In')).toBeVisible();
+          |                                                   ^
+      203 |
+      204 |         // 5. Cleanup
+      205 |         if (user && user.user) {
+        at /Users/olutobi/.gemini/antigravity/playground/nomad-pinwheel/tests/e2e/live-full-flow.spec.ts:202:51
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/live-full-flow-LIVE-Full-U-d8398-flow-with-PRE-VERIFIED-user-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/live-full-flow-LIVE-Full-U-d8398-flow-with-PRE-VERIFIED-user-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/live-full-flow-LIVE-Full-U-d8398-flow-with-PRE-VERIFIED-user-chromium/error-context.md
+
+
+[1A[2K  2 failed
+    [chromium] › tests/e2e/live-full-flow.spec.ts:26:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should complete full flow with PRE-VERIFIED user 
+    [chromium] › tests/e2e/live-full-flow.spec.ts:211:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should allow ADMIN to verify user and approve loan 
+
+[36m  Serving HTML report at http://localhost:52275. Press Ctrl+C to quit.[39m

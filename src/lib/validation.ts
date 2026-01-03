@@ -46,7 +46,7 @@ export const personalDetailsSchema = z.object({
     firstName: z.string().min(2, 'First name is required'),
     lastName: z.string().min(2, 'Last name is required'),
     nationalId: z.string().min(5, 'Valid National ID is required'),
-    phone: z.string().regex(/^\+?264\s?\d{2}\s?\d{3}\s?\d{4}$/, 'Invalid Namibian phone number'),
+    phone: z.string().regex(/^(\+?264|0)\s?\d{2}\s?\d{3}\s?\d{4}$/, 'Invalid Namibian phone number. Use format 0811234567 or +264811234567'),
 })
 
 export const employmentDetailsSchema = z.object({
@@ -63,6 +63,7 @@ export const loanDetailsSchema = z.object({
 export const documentUploadSchema = z.object({
     idDocument: z.string().min(1, 'ID Document is required'),
     payslip: z.string().min(1, 'Payslip is required'),
+    selfie: z.string().min(1, 'Live Selfie is required'),
 })
 
 // Type exports

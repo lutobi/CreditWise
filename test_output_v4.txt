@@ -1,0 +1,124 @@
+[dotenv@17.2.3] injecting env (3) from .env.local -- tip: ⚙️  override existing env vars with { override: true }
+[1A[2K[2m[WebServer] [22m[33m[1m⚠[22m[39m Warning: Next.js inferred your workspace root, but it may not be correct.
+[2m[WebServer] [22m We detected multiple lockfiles and selected the directory of /Users/olutobi/package-lock.json as the root directory.
+[2m[WebServer] [22m To silence this warning, set `turbopack.root` in your Next.js config, or consider removing one of the lockfiles if it's not needed.
+[2m[WebServer] [22m   See https://nextjs.org/docs/app/api-reference/config/next-config-js/turbopack#root-directory for more information.
+[2m[WebServer] [22m Detected additional lockfiles: 
+[2m[WebServer] [22m   * /Users/olutobi/.gemini/antigravity/playground/nomad-pinwheel/package-lock.json
+[2m[WebServer] [22m
+
+
+Running 1 test using 1 worker
+
+[1A[2K[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ⚙️  load multiple .env files with { path: ['.env.local', '.env'] }
+
+[1A[2K[1/1] [chromium] › tests/e2e/live-full-flow.spec.ts:26:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should complete full flow with PRE-VERIFIED user
+[1A[2K[chromium] › tests/e2e/live-full-flow.spec.ts:26:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should complete full flow with PRE-VERIFIED user
+TEST: Creating verified user: robot.verified.1766423804550@example.com
+
+[1A[2KTEST: Verified User Created Successfully.
+
+[1A[2KBROWSER: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+
+[1A[2KBROWSER: [HMR] connected
+
+[1A[2KTEST: Profile created manually for ID: 1aa617cd-c21d-4e59-ac42-11380393cf75
+
+[1A[2KTEST: Profile confirmed in DB: 1aa617cd-c21d-4e59-ac42-11380393cf75
+
+[1A[2KTEST: Logging in...
+
+[1A[2KBROWSER: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+
+[1A[2KBROWSER: [HMR] connected
+
+[1A[2KREQ POST https://oqufncrgcdevqeiglmgj.supabase.co/auth/v1/token?grant_type=password: {"email":"robot.verified.1766423804550@example.com","password":"Password123!","gotrue_meta_security":{}}
+
+[1A[2KTEST: Login Successful! On Dashboard.
+
+[1A[2KREQ GET https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/verifications?select=*&user_id=eq.1aa617cd-c21d-4e59-ac42-11380393cf75
+
+[1A[2KREQ GET https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/verifications?select=*&user_id=eq.1aa617cd-c21d-4e59-ac42-11380393cf75
+
+[1A[2KREQ GET https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/loans?select=*&user_id=eq.1aa617cd-c21d-4e59-ac42-11380393cf75&order=created_at.desc&limit=1
+
+[1A[2KREQ GET https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/loans?select=*&user_id=eq.1aa617cd-c21d-4e59-ac42-11380393cf75&order=created_at.desc&limit=1
+
+[1A[2KTEST: Starting Application...
+
+[1A[2KBROWSER: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+
+[1A[2KBROWSER: [HMR] connected
+
+[1A[2KBROWSER: 🔍 Validating step: 1
+
+[1A[2KBROWSER: 🔍 Validating step: 2
+
+[1A[2KTEST: Uploading REAL files to Storage...
+
+[1A[2KREQ POST https://oqufncrgcdevqeiglmgj.supabase.co/storage/v1/object/documents/1aa617cd-c21d-4e59-ac42-11380393cf75/idDocument-1766423812815.jpg: [1mnull[22m
+
+[1A[2KREQ POST https://oqufncrgcdevqeiglmgj.supabase.co/storage/v1/object/documents/1aa617cd-c21d-4e59-ac42-11380393cf75/payslip-1766423813827.pdf: [1mnull[22m
+
+[1A[2KTEST: Real Documents Uploaded Successfully!
+
+[1A[2KTEST: Capturing Live Selfie...
+
+[1A[2KREQ POST https://oqufncrgcdevqeiglmgj.supabase.co/storage/v1/object/documents/1aa617cd-c21d-4e59-ac42-11380393cf75/selfie-1766423814739.jpg: [1mnull[22m
+
+[1A[2KREQ GET https://oqufncrgcdevqeiglmgj.supabase.co/storage/v1/object/public/documents/1aa617cd-c21d-4e59-ac42-11380393cf75/selfie-1766423814739.jpg
+
+[1A[2KTEST: Selfie Captured Successfully!
+
+[1A[2KBROWSER: 🔍 Validating step: 3
+
+[1A[2KBROWSER: 🔍 Validating step: 4
+
+[1A[2KTEST: Submitting Application to Real DB...
+
+[1A[2KREQ POST https://oqufncrgcdevqeiglmgj.supabase.co/rest/v1/verifications: {"user_id":"1aa617cd-c21d-4e59-ac42-11380393cf75","employer_name":"Tech Corp","monthly_income":25000,"is_employed":false,"employer_contact":"Full-time Permanent"}
+
+[1A[2KBROWSER: Failed to load resource: the server responded with a status of 400 ()
+
+[1A[2KBROWSER: Error submitting application: {code: PGRST204, details: null, hint: null, message: Could not find the 'employer_contact' column of 'verifications' in the schema cache}
+
+[1A[2KREQ FAILED: https://oqufncrgcdevqeiglmgj.supabase.co/storage/v1/object/public/documents/1aa617cd-c21d-4e59-ac42-11380393cf75/selfie-1766423814739.jpg - net::ERR_BLOCKED_BY_ORB
+
+[1A[2K  1) [chromium] › tests/e2e/live-full-flow.spec.ts:26:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should complete full flow with PRE-VERIFIED user 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: locator('text=Application Received!')
+    Expected: visible
+    Timeout: 15000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 15000ms[22m
+    [2m  - waiting for locator('text=Application Received!')[22m
+
+
+      162 |
+      163 |         // Step 5: Success
+    > 164 |         await expect(page.locator('text=Application Received!')).toBeVisible({ timeout: 15000 });
+          |                                                                  ^
+      165 |         console.log('TEST: Live Application Submitted Successfully!');
+      166 |         await page.screenshot({ path: 'test-results/screenshots/7-success.png' });
+      167 |
+        at /Users/olutobi/.gemini/antigravity/playground/nomad-pinwheel/tests/e2e/live-full-flow.spec.ts:164:66
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/live-full-flow-LIVE-Full-U-d8398-flow-with-PRE-VERIFIED-user-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/live-full-flow-LIVE-Full-U-d8398-flow-with-PRE-VERIFIED-user-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/live-full-flow-LIVE-Full-U-d8398-flow-with-PRE-VERIFIED-user-chromium/error-context.md
+
+
+[1A[2K  1 failed
+    [chromium] › tests/e2e/live-full-flow.spec.ts:26:9 › LIVE Full User Flow (Real Database + Admin Bypass) › should complete full flow with PRE-VERIFIED user 
+
+[36m  Serving HTML report at http://localhost:63964. Press Ctrl+C to quit.[39m

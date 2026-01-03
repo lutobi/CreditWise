@@ -1,4 +1,3 @@
-```typescript
 import { test, expect } from '@playwright/test';
 
 test.describe('Navigation and Auth State', () => {

@@ -65,27 +65,11 @@ test.describe('LIVE Full User Flow (Real Database + Admin Bypass)', () => {
         await page.click('text=Get Started');
         await expect(page).toHaveURL(/.*\/signup/);
 
-        // 1.5 Create Profile (Fix 23503 FK Error)
-        // Some apps have triggers for this, but manually doing it ensures safety.
-        const { error: profileError } = await supabaseAdmin.from('profiles').insert({
-            id: user.user.id,
-            full_name: 'Robot Verified',
-            national_id: '90010100123' // Matching the form fill
-        });
-
-        if (profileError) {
-            console.log('TEST WARNING: Profile creation failed (maybe trigger exists?):', profileError.message);
-        } else {
-            console.log('TEST: Profile created manually for ID:', user.user.id);
-        }
-
-        // Verify Profile Exists
-        const { data: profileCheck, error: checkError } = await supabaseAdmin.from('profiles').select('*').eq('id', user.user.id).single();
-        if (checkError || !profileCheck) {
-            console.error('TEST FATAL: Profile NOT found in DB after insert!', checkError);
-            throw new Error('Profile missing');
-        }
-        console.log('TEST: Profile confirmed in DB:', profileCheck.id);
+        // 1.5 Create Profile
+        // WE REMOVE THIS MANUALLY to test if the Application Flow auto-creates it now.
+        // See src/app/apply/page.tsx update.
+        // const { error: profileError } = await supabaseAdmin.from('profiles').insert({...});
+        console.log('TEST: Skipping manual profile creation to verify App Self-Healing...');
 
         // 2. Login with this user
         console.log('TEST: Logging in...');
@@ -136,10 +120,18 @@ test.describe('LIVE Full User Flow (Real Database + Admin Bypass)', () => {
             buffer: Buffer.from('this is a test pdf content')
         });
 
-        // Wait for Green Checks
+        // Wait for Green Checks for Files
         await expect(page.locator('.text-green-500').nth(0)).toBeVisible({ timeout: 15000 });
         await expect(page.locator('.text-green-500').nth(1)).toBeVisible({ timeout: 15000 });
         console.log('TEST: Real Documents Uploaded Successfully!');
+
+        // Live Selfie Capture (Using Fake Camera)
+        console.log('TEST: Capturing Live Selfie...');
+        await expect(page.locator('text=Live Selfie (Liveness Check)')).toBeVisible();
+        await page.click('button:has-text("Capture Live Selfie")');
+        // Wait for "Selfie Captured" confirmation
+        await expect(page.locator('text=Selfie Captured')).toBeVisible({ timeout: 10000 });
+        console.log('TEST: Selfie Captured Successfully!');
 
         await page.click('button:has-text("Next Step")');
 
@@ -157,13 +149,10 @@ test.describe('LIVE Full User Flow (Real Database + Admin Bypass)', () => {
         console.log('TEST: Live Application Submitted Successfully!');
         await page.screenshot({ path: 'test-results/screenshots/7-success.png' });
 
-        // 6. Admin Check
-        console.log('TEST: Navigating to Admin Portal...');
-        await page.goto('/admin');
-        await expect(page.locator('text=Pending Loans')).toBeVisible();
-        await expect(page.locator(`text=N$ 10000`)).toBeVisible({ timeout: 10000 });
-        await page.screenshot({ path: 'test-results/screenshots/9-admin-dashboard.png' });
-        console.log('TEST: Admin Portal Verified.');
+        console.log('TEST: Live Application Submitted Successfully!');
+        await page.screenshot({ path: 'test-results/screenshots/7-success.png' });
+
+        // (Removed Admin Check for Regular User - Security Policy now blocks this)
 
         // 7. Dashboard Check (Day 4 Requirement: Real User Data)
         console.log('TEST: Navigating back to User Dashboard to verify Real Data Connection...');
@@ -191,7 +180,9 @@ test.describe('LIVE Full User Flow (Real Database + Admin Bypass)', () => {
         await page.screenshot({ path: 'test-results/screenshots/10-user-dashboard-final.png' });
 
         // 4. Logout
-        await page.goto('/login');
+        console.log('TEST: Logging out...');
+        await page.click('button:has-text("Sign Out")');
+        // Wait for redirect to login or home
         await expect(page.locator('text=Log In')).toBeVisible();
 
         // 5. Cleanup
@@ -199,5 +190,98 @@ test.describe('LIVE Full User Flow (Real Database + Admin Bypass)', () => {
             console.log('TEST: Cleaning up - Deleting test user...');
             await supabaseAdmin.auth.admin.deleteUser(user.user.id);
         }
+    });
+
+    test('should allow ADMIN to verify user and approve loan', async ({ page }) => {
+        const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+        if (!supabaseUrl || !serviceRoleKey) {
+            test.skip(true, 'Skipping: Missing SUPABASE_SERVICE_ROLE_KEY');
+            return;
+        }
+
+        const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
+            auth: { autoRefreshToken: false, persistSession: false }
+        });
+
+        // 1. Setup: Create a Regular User AND an Admin User
+        const uniqueId = Date.now();
+        const userEmail = `user.${uniqueId}@example.com`;
+        const adminEmail = `admin.${uniqueId}@example.com`;
+        const password = 'Password123!';
+
+        // Create Regular User
+        const { data: regularUser, error: userError } = await supabaseAdmin.auth.admin.createUser({
+            email: userEmail,
+            password: password,
+            email_confirm: true
+        });
+        if (userError) throw userError;
+
+        // Create Profile for Regular User
+        const uniqueName = `Regular Applicant ${uniqueId}`;
+        await supabaseAdmin.from('profiles').insert({
+            id: regularUser.user.id,
+            full_name: uniqueName,
+            national_id: '90090012345'
+        });
+
+        // Create Verification Record (Pending)
+        await supabaseAdmin.from('verifications').insert({
+            user_id: regularUser.user.id,
+            employer_name: 'Test Corp',
+            monthly_income: 6000,
+            is_employed: false
+        });
+
+        // Create Admin User with Meta Data
+        const { data: adminUser, error: adminError } = await supabaseAdmin.auth.admin.createUser({
+            email: adminEmail,
+            password: password,
+            email_confirm: true,
+            app_metadata: { role: 'admin' }, // KEY: Give Admin Role
+            user_metadata: { full_name: 'Admin User' }
+        });
+        if (adminError) throw adminError;
+
+        console.log(`TEST: Created Regular User (${userEmail}) and Admin User (${adminEmail})`);
+
+        // 2. Login as Admin
+        await page.goto('/login');
+        await page.fill('input[id="email"]', adminEmail);
+        await page.fill('input[id="password"]', password);
+        await page.click('button:has-text("Sign In")');
+        await page.waitForURL('**/dashboard');
+
+        // 3. Navigate to Admin Portal
+        console.log('TEST: Admin navigating to portal...');
+        await page.goto('/admin');
+        await expect(page.locator('text=Admin Portal')).toBeVisible();
+
+        // 4. Verify the Pending Verification is Visible
+        await expect(page.locator(`text=${uniqueName}`)).toBeVisible();
+        await page.screenshot({ path: 'test-results/screenshots/admin-portal-pending.png' });
+
+        // 5. Click "Verify & Calculate Score"
+        // Find the card containing the unique name, then find the button within it.
+        // We scope to the direct children of the container that have the text.
+        await page.locator('.space-y-4 > div').filter({ hasText: uniqueName }).getByRole('button', { name: 'Verify & Calculate Score' }).click();
+
+        // 6. Handle Alert/Confirmation
+        // ideally the UI updates "Pending" to "Verified" or removes it from the list.
+        await expect(page.locator(`text=${uniqueName}`)).toBeHidden({ timeout: 10000 });
+
+        console.log('TEST: Applicant removed from pending list -> Verification Success.');
+
+        // 7. Verify DB State
+        const { data: verifyCheck } = await supabaseAdmin.from('verifications').select('*').eq('user_id', regularUser.user.id).single();
+        expect(verifyCheck.is_employed).toBe(true);
+        expect(verifyCheck.credit_score).toBeGreaterThan(300); // 300 base + 100 for >5000 income
+        console.log('TEST: Database verified. Score:', verifyCheck.credit_score);
+
+        // Cleanup
+        await supabaseAdmin.auth.admin.deleteUser(regularUser.user.id);
+        await supabaseAdmin.auth.admin.deleteUser(adminUser.user.id);
     });
 });

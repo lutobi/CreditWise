@@ -25,21 +25,45 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
+    const { income, employmentType } = body;
 
-    // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    // Deterministic Scoring Formula
+    let score = 300; // Base Score
 
-    // Mock logic
-    const isEmployed = Math.random() > 0.2; // 80% chance of being employed
-    const creditScore = Math.floor(Math.random() * (850 - 500 + 1) + 500);
+    // 1. Income Factors
+    const monthlyIncome = parseFloat(income || '0');
+    if (monthlyIncome > 15000) {
+        score += 200;
+    } else if (monthlyIncome > 5000) {
+        score += 100;
+    }
+
+    // 2. Employment Type Factors
+    const type = employmentType || '';
+    if (type.toLowerCase().includes('government')) {
+        score += 200;
+    } else if (type.toLowerCase().includes('permanent')) {
+        score += 150;
+    } else if (type.toLowerCase().includes('contract')) {
+        score += 50;
+    }
+
+    // Cap at 1000
+    if (score > 1000) score = 1000;
+
+    const isQualified = score >= 600;
 
     return NextResponse.json({
         success: true,
         data: {
-            verified: isEmployed,
-            creditScore: creditScore,
-            message: isEmployed ? "Employment verified successfully." : "Employment verification pending.",
-            // Reliability: Trace ID for logging
+            verified: true,
+            score: score,
+            isQualified: isQualified,
+            breakdown: {
+                base: 300,
+                incomeFactor: monthlyIncome > 15000 ? 200 : (monthlyIncome > 5000 ? 100 : 0),
+                employmentFactor: score - 300 - (monthlyIncome > 15000 ? 200 : (monthlyIncome > 5000 ? 100 : 0))
+            },
             trace_id: crypto.randomUUID(),
         }
     });

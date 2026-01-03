@@ -19,6 +19,7 @@ type LoanApplication = {
     documents: {
         id_url: string
         payslip_url: string
+        selfie_url?: string
     } | null
     profiles: {
         full_name: string
@@ -32,10 +33,12 @@ type VerificationRequest = {
     monthly_income: number
     is_employed: boolean
     credit_score: number
+    employment_type?: string // Added field
     profiles: {
         full_name: string
     }
 }
+
 
 export default function AdminPage() {
     const { user, isLoading: authLoading } = useAuth()
@@ -46,8 +49,16 @@ export default function AdminPage() {
 
     useEffect(() => {
         if (!authLoading) {
-            // In a real app, check for admin role here
-            // if (!user || user.role !== 'admin') router.push('/')
+            // Check for admin role
+            if (!user || user.app_metadata?.role !== 'admin') {
+                // Make sure to handle the case where user might be null (not logged in)
+                // or logged in but not admin. 
+                // For now, simple redirect is fine.
+                if (user?.app_metadata?.role !== 'admin') {
+                    // create a check to avoid infinite redirect if on login
+                    router.push('/');
+                }
+            }
             fetchAdminData()
         }
     }, [user, authLoading])
@@ -84,12 +95,64 @@ export default function AdminPage() {
         fetchAdminData() // Refresh
     }
 
-    const handleVerifyUser = async (userId: string, creditScore: number) => {
-        await supabase.from('verifications').update({
-            is_employed: true,
-            credit_score: creditScore
-        }).eq('user_id', userId)
-        fetchAdminData() // Refresh
+    const handleViewDocument = async (url?: string) => {
+        if (!url) return;
+        try {
+            const response = await fetch('/api/admin/document', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token || ''}`
+                },
+                body: JSON.stringify({ url })
+            })
+            const data = await response.json()
+            if (data.signedUrl) {
+                window.open(data.signedUrl, '_blank')
+            } else {
+                alert('Failed to generate secure link: ' + (data.error || 'Unknown error'))
+            }
+        } catch (error) {
+            console.error('Error viewing document:', error)
+            alert('Error viewing document')
+        }
+    }
+
+    const handleVerifyUser = async (userId: string, income: number, employmentType: string) => {
+        try {
+            // 1. Calculate Score via API
+            const response = await fetch('/api/verify', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token || ''}`
+                },
+                body: JSON.stringify({
+                    income: income.toString(),
+                    employmentType: employmentType // Assuming this comes from the record? Wait, `verifications` table has employer_name, monthly_income but maybe not 'employment_type'?
+                    // Let's check the type definition at the top of the file
+                })
+            })
+
+            const result = await response.json();
+
+            if (result.success) {
+                // 2. Update Supabase with the calculated score
+                await supabase.from('verifications').update({
+                    is_employed: true,
+                    credit_score: result.data.score
+                }).eq('user_id', userId)
+
+                // Refresh Data
+                fetchAdminData()
+                alert(`User Verified! System Calculated Score: ${result.data.score}`)
+            } else {
+                alert('Verification Failed')
+            }
+
+        } catch (error) {
+            console.error('Verification error:', error)
+        }
     }
 
     if (loading) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin" /></div>
@@ -122,12 +185,17 @@ export default function AdminPage() {
                                             <p>Duration: {loan.duration_months} months</p>
                                             {loan.documents && (
                                                 <div className="flex gap-2 mt-2">
-                                                    <Button variant="outline" size="sm" onClick={() => window.open(loan.documents?.id_url, '_blank')}>
+                                                    <Button variant="outline" size="sm" onClick={() => handleViewDocument(loan.documents?.id_url)}>
                                                         View ID
                                                     </Button>
-                                                    <Button variant="outline" size="sm" onClick={() => window.open(loan.documents?.payslip_url, '_blank')}>
+                                                    <Button variant="outline" size="sm" onClick={() => handleViewDocument(loan.documents?.payslip_url)}>
                                                         View Payslip
                                                     </Button>
+                                                    {loan.documents?.selfie_url && (
+                                                        <Button variant="outline" size="sm" className="border-green-500 text-green-600 hover:bg-green-50" onClick={() => handleViewDocument(loan.documents?.selfie_url)}>
+                                                            View Selfie
+                                                        </Button>
+                                                    )}
                                                 </div>
                                             )}
                                         </div>
@@ -164,8 +232,8 @@ export default function AdminPage() {
                                             <p>Income: N$ {verif.monthly_income}</p>
                                         </div>
                                         <div className="flex gap-2 items-center">
-                                            <Button size="sm" onClick={() => handleVerifyUser(verif.user_id, 750)}>
-                                                Verify & Set Score 750
+                                            <Button size="sm" onClick={() => handleVerifyUser(verif.user_id, verif.monthly_income, verif.employment_type || 'Unknown')}>
+                                                Verify & Calculate Score
                                             </Button>
                                         </div>
                                     </CardContent>

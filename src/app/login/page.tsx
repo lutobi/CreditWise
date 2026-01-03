@@ -61,7 +61,12 @@ export default function LoginPage() {
             }
 
             if (data.user) {
-                router.push("/dashboard")
+                // Check if user is admin
+                if (data.user.app_metadata?.role === 'admin') {
+                    router.push("/admin")
+                } else {
+                    router.push("/dashboard")
+                }
                 router.refresh()
             }
         } catch (err: any) {
