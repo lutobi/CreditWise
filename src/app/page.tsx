@@ -57,8 +57,8 @@ function LoanCalculatorWidget() {
           <button
             onClick={() => setLoanType('term')}
             className={`flex-1 py-2 px-4 rounded-md text-sm font-bold transition-all ${loanType === 'term'
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
           >
             Term Loan
@@ -66,8 +66,8 @@ function LoanCalculatorWidget() {
           <button
             onClick={() => setLoanType('payday')}
             className={`flex-1 py-2 px-4 rounded-md text-sm font-bold transition-all ${loanType === 'payday'
-                ? 'bg-primary text-primary-foreground shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+              ? 'bg-primary text-primary-foreground shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               }`}
           >
             Payday Loan

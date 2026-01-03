@@ -98,7 +98,7 @@ export default function SignupPage() {
                         </div>
                         <CardTitle className="text-2xl font-bold">Check your email</CardTitle>
                         <CardDescription>
-                            We've sent a verification link to <strong>{formData.email}</strong>
+                            We&apos;ve sent a verification link to <strong>{formData.email}</strong>
                         </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">

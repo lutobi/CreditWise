@@ -72,7 +72,7 @@ export default function AdminPage() {
                 .eq('status', 'pending')
                 .order('created_at', { ascending: false })
 
-            if (loansData) setLoans(loansData as any)
+            if (loansData) setLoans(loansData as unknown as LoanApplication[])
 
             // Fetch pending verifications
             const { data: verifData } = await supabase
@@ -81,7 +81,7 @@ export default function AdminPage() {
                 .eq('is_employed', false)
                 .not('employer_name', 'is', null)
 
-            if (verifData) setVerifications(verifData as any)
+            if (verifData) setVerifications(verifData as unknown as VerificationRequest[])
 
         } catch (error) {
             console.error("Error fetching admin data:", error)
