@@ -10,7 +10,8 @@ const eslintConfig = defineConfig([
       "@typescript-eslint/no-explicit-any": "off",
       "react/no-unescaped-entities": "off",
       "@typescript-eslint/no-unused-vars": "warn",
-      "@next/next/no-img-element": "off"
+      "@next/next/no-img-element": "off",
+      "@typescript-eslint/no-require-imports": "off"
     }
   },
   // Override default ignores of eslint-config-next.
@@ -20,6 +21,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    "tests/**",
+    "*.js"
   ]),
 ]);
 
