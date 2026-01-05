@@ -77,8 +77,8 @@ export default function LoanDetailsPage() {
                                 </div>
                             </div>
                             <span className={`px-3 py-1 rounded-full text-xs font-medium capitalize ${loan.status === 'approved' ? 'bg-green-100 text-green-700' :
-                                    loan.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                                        'bg-yellow-100 text-yellow-700'
+                                loan.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                                    'bg-yellow-100 text-yellow-700'
                                 }`}>
                                 {loan.status}
                             </span>
@@ -90,7 +90,7 @@ export default function LoanDetailsPage() {
                                     <Calendar className="h-4 w-4" />
                                     <span className="text-sm">Duration</span>
                                 </div>
-                                <p className="font-medium">{loan.duration_months} Months</p>
+                                <p className="font-medium">{loan.duration_months} Month{loan.duration_months !== 1 ? 's' : ''}</p>
                             </div>
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2 text-muted-foreground">

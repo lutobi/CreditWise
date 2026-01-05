@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { CreditCard } from "lucide-react"
+import { CreditCard, Eye, EyeOff } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { supabase } from "@/lib/supabase"
 import { signupSchema, type SignupFormData } from "@/lib/validation"
@@ -16,6 +16,7 @@ export default function SignupPage() {
         password: "",
         confirmPassword: "",
     })
+    const [showPassword, setShowPassword] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [errors, setErrors] = useState<Partial<Record<keyof SignupFormData, string>>>({})
@@ -53,7 +54,7 @@ export default function SignupPage() {
                     data: {
                         full_name: formData.fullName,
                     },
-                    emailRedirectTo: `${window.location.origin}/auth/callback`,
+                    emailRedirectTo: 'https://www.omarifinance.com/auth/callback',
                 },
             })
 
@@ -74,6 +75,16 @@ export default function SignupPage() {
                 if (profileError) {
                     console.error("Error creating profile:", profileError)
                 }
+                if (profileError) {
+                    console.error("Error creating profile:", profileError)
+                }
+            }
+
+            // If we have a session, it means email verification is disabled or auto-confirmed
+            if (data.session) {
+                // Force a hard refresh to update auth state
+                window.location.href = '/dashboard'
+                return
             }
 
             setEmailSent(true)
@@ -103,7 +114,7 @@ export default function SignupPage() {
                     </CardHeader>
                     <CardContent className="space-y-4">
                         <p className="text-sm text-muted-foreground text-center">
-                            Click the link in the email to verify your account and get started with CreditWise.
+                            Click the link in the email to verify your account and get started with Omari Finance.
                         </p>
                         <Link href="/login" className="block">
                             <Button className="w-full" size="lg">Go to Login</Button>
@@ -125,7 +136,7 @@ export default function SignupPage() {
                     </div>
                     <CardTitle className="text-2xl font-bold">Create an account</CardTitle>
                     <CardDescription>
-                        Enter your details to get started with CreditWise
+                        Enter your details to get started with Omari Finance
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -169,14 +180,23 @@ export default function SignupPage() {
                             <label htmlFor="password" className="text-sm font-medium leading-none">
                                 Password
                             </label>
-                            <input
-                                type="password"
-                                id="password"
-                                value={formData.password}
-                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                className={`flex h-10 w-full rounded-md border ${errors.password ? 'border-red-500' : 'border-input'} bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
-                                disabled={isLoading}
-                            />
+                            <div className="relative">
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    id="password"
+                                    value={formData.password}
+                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                    className={`flex h-10 w-full rounded-md border ${errors.password ? 'border-red-500' : 'border-input'} bg-background px-3 py-2 text-sm pr-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+                                    disabled={isLoading}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                >
+                                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </button>
+                            </div>
                             {errors.password && <p className="text-xs text-red-500">{errors.password}</p>}
                             <p className="text-xs text-muted-foreground">
                                 Min 8 characters, 1 uppercase, 1 lowercase, 1 number
@@ -186,14 +206,23 @@ export default function SignupPage() {
                             <label htmlFor="confirmPassword" className="text-sm font-medium leading-none">
                                 Confirm Password
                             </label>
-                            <input
-                                type="password"
-                                id="confirmPassword"
-                                value={formData.confirmPassword}
-                                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                                className={`flex h-10 w-full rounded-md border ${errors.confirmPassword ? 'border-red-500' : 'border-input'} bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
-                                disabled={isLoading}
-                            />
+                            <div className="relative">
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    id="confirmPassword"
+                                    value={formData.confirmPassword}
+                                    onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                                    className={`flex h-10 w-full rounded-md border ${errors.confirmPassword ? 'border-red-500' : 'border-input'} bg-background px-3 py-2 text-sm pr-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+                                    disabled={isLoading}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                >
+                                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </button>
+                            </div>
                             {errors.confirmPassword && <p className="text-xs text-red-500">{errors.confirmPassword}</p>}
                         </div>
                         <Button className="w-full" size="lg" disabled={isLoading}>

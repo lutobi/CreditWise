@@ -155,6 +155,69 @@ export default function AdminPage() {
         }
     }
 
+    const handleVerifyFace = async (loanId: string, idDocUrl: string, selfieUrl?: string) => {
+        if (!idDocUrl || !selfieUrl) {
+            alert("Missing ID or Selfie for this application.");
+            return;
+        }
+
+        const confirmVerify = window.confirm("Run AWS Face Verification for this applicant? This incurs a cost.");
+        if (!confirmVerify) return;
+
+        try {
+            // 1. Robust Path Extraction (Shared Logic)
+            const getPath = (fullUrl: string) => {
+                if (!fullUrl) return '';
+                try {
+                    const urlObj = new URL(fullUrl);
+                    const pathParts = urlObj.pathname.split('/documents/');
+                    if (pathParts.length > 1) return decodeURIComponent(pathParts[1]);
+                    return '';
+                } catch (e) { return '' }
+            }
+
+            const idPath = getPath(idDocUrl);
+            const selfiePath = getPath(selfieUrl);
+
+            if (!idPath || !selfiePath) throw new Error("Could not extract file paths.");
+
+            // 2. Generate Signed URLs (Admin Context)
+            const { data: idSigned } = await supabase.storage.from('documents').createSignedUrl(idPath, 60);
+            const { data: selfieSigned } = await supabase.storage.from('documents').createSignedUrl(selfiePath, 60);
+
+            // 3. Call Verification API
+            const response = await fetch('/api/verify-face', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token || ''}`
+                },
+                body: JSON.stringify({
+                    idUrl: idSigned?.signedUrl || idDocUrl,
+                    selfieUrl: selfieSigned?.signedUrl || selfieUrl
+                })
+            })
+
+            const result = await response.json();
+
+            if (!response.ok) {
+                alert(`Verification Failed: ${result.error || result.details || 'Unknown Error'}`);
+                return;
+            }
+
+            if (result.isMatch) {
+                alert(`✅ IDENTITY VERIFIED!\nConfidence: ${result.similarity.toFixed(1)}%`);
+                // Optional: Update loan status or store verification result?
+            } else {
+                alert(`❌ MISMATCH WARNING.\nSimilarity: ${result.similarity?.toFixed(1) || 0}%.\nFaces do not match.`);
+            }
+
+        } catch (error: any) {
+            console.error('Verification error:', error)
+            alert(`Error running verification: ${error.message}`)
+        }
+    }
+
     if (loading) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin" /></div>
 
     return (
@@ -182,18 +245,27 @@ export default function AdminPage() {
                                     <CardContent>
                                         <div className="text-sm text-muted-foreground mb-4">
                                             <p>ID: {loan.profiles?.national_id}</p>
-                                            <p>Duration: {loan.duration_months} months</p>
+                                            <p>Duration: {loan.duration_months} Month{loan.duration_months !== 1 ? 's' : ''}</p>
                                             {loan.documents && (
-                                                <div className="flex gap-2 mt-2">
-                                                    <Button variant="outline" size="sm" onClick={() => handleViewDocument(loan.documents?.id_url)}>
-                                                        View ID
-                                                    </Button>
-                                                    <Button variant="outline" size="sm" onClick={() => handleViewDocument(loan.documents?.payslip_url)}>
-                                                        View Payslip
-                                                    </Button>
-                                                    {loan.documents?.selfie_url && (
-                                                        <Button variant="outline" size="sm" className="border-green-500 text-green-600 hover:bg-green-50" onClick={() => handleViewDocument(loan.documents?.selfie_url)}>
-                                                            View Selfie
+                                                <div className="flex flex-col gap-2 mt-2">
+                                                    <div className="flex gap-2">
+                                                        <Button variant="outline" size="sm" onClick={() => handleViewDocument(loan.documents?.id_url)}>
+                                                            View ID
+                                                        </Button>
+                                                        <Button variant="outline" size="sm" onClick={() => handleViewDocument(loan.documents?.payslip_url)}>
+                                                            View Payslip
+                                                        </Button>
+                                                        {loan.documents?.selfie_url && (
+                                                            <Button variant="outline" size="sm" className="border-green-500 text-green-600 hover:bg-green-50" onClick={() => handleViewDocument(loan.documents?.selfie_url)}>
+                                                                View Selfie
+                                                            </Button>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Admin Verification Action */}
+                                                    {loan.documents?.selfie_url && loan.documents?.id_url && (
+                                                        <Button size="sm" variant="secondary" className="w-full bg-blue-100 text-blue-700 hover:bg-blue-200 mt-2" onClick={() => handleVerifyFace(loan.id, loan.documents!.id_url, loan.documents?.selfie_url)}>
+                                                            🔍 Verify Face Identity
                                                         </Button>
                                                     )}
                                                 </div>
@@ -241,10 +313,10 @@ export default function AdminPage() {
                             ))
                         )}
                     </div>
-                </div>
-            </main>
+                </div >
+            </main >
 
             <Footer />
-        </div>
+        </div >
     )
 }

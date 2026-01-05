@@ -1,26 +1,48 @@
 "use client"
 
 import Link from "next/link"
-import { ArrowRight, CheckCircle2, ShieldCheck, Zap, Banknote, TrendingUp } from "lucide-react"
+import { ArrowRight, CheckCircle2, ShieldCheck, Zap, Banknote, TrendingUp, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { useState } from "react"
+import { formatCurrency } from "@/lib/utils"
+
+// Custom Simple Accordion
+function FAQItem({ question, answer }: { question: string, answer: string }) {
+  const [isOpen, setIsOpen] = useState(false)
+  return (
+    <div className="border-b border-primary/10 last:border-0">
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex w-full items-center justify-between py-4 font-semibold text-left transition-all hover:text-primary"
+      >
+        {question}
+        <ChevronRight className={`h-4 w-4 transition-transform duration-200 ${isOpen ? "rotate-90 text-primary" : ""}`} />
+      </button>
+      <div className={`grid transition-all duration-300 ease-in-out ${isOpen ? "grid-rows-[1fr] opacity-100 pb-4" : "grid-rows-[0fr] opacity-0"}`}>
+        <div className="overflow-hidden text-sm text-muted-foreground">
+          {answer}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 function LoanCalculatorWidget() {
   const [amount, setAmount] = useState(5000)
-  const [months, setMonths] = useState(6)
-  const [loanType, setLoanType] = useState<'term' | 'payday'>('term')
+  const [months, setMonths] = useState(1) // Default to 1 for Payday
+  const [loanType, setLoanType] = useState<'term' | 'payday'>('payday') // Default to Payday
 
   // Calculate based on loan type
   const calculateLoan = () => {
     if (loanType === 'payday') {
-      // Payday Loan: 30% flat fee (for loans ≤5 months)
-      const fee = amount * 0.30
+      // Payday Loan: 25% flat fee (for loans ≤5 months)
+      const fee = amount * 0.25
       const totalRepayment = amount + fee
       const monthlyPayment = totalRepayment / months
-      return { totalRepayment, monthlyPayment, effectiveAPR: 30 }
+      return { totalRepayment, monthlyPayment, effectiveAPR: 25 }
     } else {
       // Term Loan: 18% p.a. + 15% initiation fee + N$50/month service fee
       const annualRate = 0.18
@@ -52,10 +74,14 @@ function LoanCalculatorWidget() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Loan Type Toggle */}
+        {/* Loan Type Toggle - HIDDEN FOR PAYDAY FOCUS */}
+        {/* 
         <div className="flex gap-2 p-1 bg-muted rounded-lg">
           <button
-            onClick={() => setLoanType('term')}
+            onClick={() => {
+              setLoanType('term')
+              setMonths(6)
+            }}
             className={`flex-1 py-2 px-4 rounded-md text-sm font-bold transition-all ${loanType === 'term'
               ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -64,7 +90,10 @@ function LoanCalculatorWidget() {
             Term Loan
           </button>
           <button
-            onClick={() => setLoanType('payday')}
+            onClick={() => {
+              setLoanType('payday')
+              setMonths(1)
+            }}
             className={`flex-1 py-2 px-4 rounded-md text-sm font-bold transition-all ${loanType === 'payday'
               ? 'bg-primary text-primary-foreground shadow-sm'
               : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
@@ -73,34 +102,32 @@ function LoanCalculatorWidget() {
             Payday Loan
           </button>
         </div>
+        */}
+        {/* End Toggle */}
 
-        {/* Info Badge */}
-        <div className="text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 p-3 rounded-lg">
-          {loanType === 'term' ? (
-            <span>📊 <strong>18% p.a.</strong> + 15% initiation fee + N$50/month service fee</span>
-          ) : (
-            <span>⚡ <strong>30% flat fee</strong> for quick loans (max 5 months)</span>
-          )}
+        {/* Info Badge Removed */}
+        <div className="text-xs text-slate-600 dark:text-slate-400 bg-slate-50 dark:bg-slate-900 p-3 rounded-lg opacity-0 h-0 p-0 m-0 overflow-hidden">
+          {/* Hidden to preserve layout if needed, or just remove. Better to remove. */}
         </div>
 
         {/* Amount Slider */}
         <div className="space-y-3">
           <div className="flex justify-between text-sm font-bold">
             <span className="text-slate-900 dark:text-white">Amount</span>
-            <span className="text-primary text-lg">N$ {amount.toLocaleString()}</span>
+            <span className="text-primary text-lg">{formatCurrency(amount)}</span>
           </div>
-          <input
-            type="range"
-            min="1000"
-            max="50000"
-            step="1000"
-            value={amount}
-            onChange={(e) => setAmount(Number(e.target.value))}
-            className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
-          />
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>N$ 1,000</span>
-            <span>N$ 50,000</span>
+          <div className="flex items-center gap-4">
+            <span className="text-xs font-medium text-muted-foreground w-12 text-right">N$ 1k</span>
+            <input
+              type="range"
+              min="1000"
+              max="50000"
+              step="1000"
+              value={amount}
+              onChange={(e) => setAmount(Number(e.target.value))}
+              className="flex-1 h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary"
+            />
+            <span className="text-xs font-medium text-muted-foreground w-12">N$ 50k</span>
           </div>
         </div>
 
@@ -108,20 +135,24 @@ function LoanCalculatorWidget() {
         <div className="space-y-3">
           <div className="flex justify-between text-sm font-bold">
             <span className="text-slate-900 dark:text-white">Duration</span>
-            <span className="text-primary font-bold text-lg">{months} Months</span>
+            <span className="text-primary font-bold text-lg">{months} Month{months !== 1 ? 's' : ''}</span>
           </div>
-          <input
-            type="range"
-            min={loanType === 'payday' ? 1 : 3}
-            max={loanType === 'payday' ? 5 : 36}
-            step="1"
-            value={months}
-            onChange={(e) => setMonths(Number(e.target.value))}
-            className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-secondary"
-          />
-          <div className="flex justify-between text-xs text-muted-foreground">
-            <span>{loanType === 'payday' ? '1 Month' : '3 Months'}</span>
-            <span>{loanType === 'payday' ? '5 Months' : '36 Months'}</span>
+          <div className="flex items-center gap-4">
+            <span className="text-xs font-medium text-muted-foreground w-12 text-right">
+              {loanType === 'payday' ? '1m' : '3m'}
+            </span>
+            <input
+              type="range"
+              min={loanType === 'payday' ? 1 : 3}
+              max={loanType === 'payday' ? 1 : 36}
+              step="1"
+              value={months}
+              onChange={(e) => setMonths(Number(e.target.value))}
+              className="flex-1 h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-secondary"
+            />
+            <span className="text-xs font-medium text-muted-foreground w-12">
+              {loanType === 'payday' ? '1m' : '36m'}
+            </span>
           </div>
         </div>
 
@@ -129,21 +160,17 @@ function LoanCalculatorWidget() {
         <div className="rounded-xl bg-primary/10 p-4 space-y-2 border border-primary/20">
           <div className="flex justify-between items-center">
             <span className="text-sm font-bold text-slate-900 dark:text-white">Monthly Payment</span>
-            <span className="text-3xl font-bold text-primary">N$ {Math.ceil(monthlyPayment).toLocaleString()}</span>
+            <span className="text-3xl font-bold text-primary">{formatCurrency(Math.ceil(monthlyPayment))}</span>
           </div>
           <div className="flex justify-between text-xs text-slate-600 dark:text-slate-400 pt-2 border-t border-primary/10">
             <span>Total Repayment</span>
-            <span className="font-semibold">N$ {Math.ceil(totalRepayment).toLocaleString()}</span>
-          </div>
-          <div className="flex justify-between text-xs text-slate-600 dark:text-slate-400">
-            <span>Effective APR</span>
-            <span className="font-semibold">{effectiveAPR.toFixed(1)}%</span>
+            <span className="font-semibold">{formatCurrency(Math.ceil(totalRepayment))}</span>
           </div>
         </div>
 
         <Link href={`/signup?amount=${amount}&months=${months}&type=${loanType}`} className="w-full block">
           <Button className="w-full text-lg font-semibold h-12 shadow-lg hover:shadow-xl transition-all" size="lg">
-            Apply for N$ {amount.toLocaleString()}
+            Apply for {formatCurrency(amount)}
           </Button>
         </Link>
       </CardContent>
@@ -170,8 +197,11 @@ export default function Home() {
                   Unlock Your <span className="text-primary">Financial Potential</span>
                 </h1>
                 <p className="text-lg text-muted-foreground md:text-xl max-w-[500px]">
-                  Get instant access to loans, verify your credit score, and manage your financial health with CreditWise. Simple, fast, and secure.
+                  Get fast access to loans, check your application status, and manage your financial health with Omari Finance. Simple, responsible, and secure.
                 </p>
+                <div className="text-xs text-muted-foreground border-l-2 border-primary/50 pl-3">
+                  Lending decisions are subject to credit, affordability, and verification checks. Terms, fees, and interest apply.
+                </div>
                 <div className="flex flex-col sm:flex-row gap-4">
                   <Link href="/signup">
                     <Button size="lg" className="w-full sm:w-auto text-lg px-8">
@@ -189,7 +219,7 @@ export default function Home() {
                     <CheckCircle2 className="h-4 w-4 text-primary" /> No hidden fees
                   </div>
                   <div className="flex items-center gap-1">
-                    <CheckCircle2 className="h-4 w-4 text-primary" /> Instant approval
+                    <CheckCircle2 className="h-4 w-4 text-primary" /> Fast online application
                   </div>
                 </div>
               </div>
@@ -209,7 +239,7 @@ export default function Home() {
         <section id="features" className="py-20 bg-muted/30">
           <div className="container mx-auto px-4 md:px-6">
             <div className="text-center mb-16">
-              <h2 className="text-3xl font-bold tracking-tight md:text-4xl mb-4">Why Choose CreditWise?</h2>
+              <h2 className="text-3xl font-bold tracking-tight md:text-4xl mb-4">Why Choose Omari Finance?</h2>
               <p className="text-lg text-muted-foreground max-w-[700px] mx-auto">
                 We provide the tools you need to take control of your financial future in Namibia.
               </p>
@@ -221,11 +251,11 @@ export default function Home() {
                   <div className="h-12 w-12 rounded-xl bg-primary/10 flex items-center justify-center mb-4 text-primary">
                     <Zap className="h-6 w-6" />
                   </div>
-                  <CardTitle>Fast & Easy Loans</CardTitle>
+                  <CardTitle>Fast & Easy Application</CardTitle>
                 </CardHeader>
                 <CardContent>
                   <p className="text-muted-foreground">
-                    Apply online in minutes and get approved instantly. Funds are transferred directly to your bank account.
+                    Submit your application quickly online. Once approved, funds are transferred promptly to your bank account.
                   </p>
                 </CardContent>
               </Card>
@@ -239,7 +269,7 @@ export default function Home() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-muted-foreground">
-                    Check your credit score instantly and understand your financial standing with our built-in tools.
+                    View your credit report as part of the application process (with your consent) to understand your financial standing.
                   </p>
                 </CardContent>
               </Card>
@@ -253,7 +283,7 @@ export default function Home() {
                 </CardHeader>
                 <CardContent>
                   <p className="text-muted-foreground">
-                    Secure verification of your employment status to speed up loan approvals and build trust.
+                    Employment and income information is verified where provided as part of our affordability assessment.
                   </p>
                 </CardContent>
               </Card>
@@ -320,7 +350,7 @@ export default function Home() {
           <div className="container mx-auto px-4 md:px-6 text-center">
             <h2 className="text-3xl font-bold tracking-tight md:text-4xl mb-6">Ready to get started?</h2>
             <p className="text-xl opacity-90 mb-8 max-w-[600px] mx-auto">
-              Join thousands of Namibians who trust CreditWise for their financial needs.
+              Join thousands of Namibians who trust Omari Finance for their financial needs.
             </p>
             <Link href="/apply">
               <Button size="lg" variant="secondary" className="text-lg px-8 font-bold">

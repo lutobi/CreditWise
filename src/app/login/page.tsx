@@ -5,7 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { CreditCard } from "lucide-react"
+import { CreditCard, Eye, EyeOff } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { supabase } from "@/lib/supabase"
 import { loginSchema, type LoginFormData } from "@/lib/validation"
@@ -15,6 +15,7 @@ export default function LoginPage() {
         email: "",
         password: "",
     })
+    const [showPassword, setShowPassword] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
     const [errors, setErrors] = useState<Partial<Record<keyof LoginFormData, string>>>({})
@@ -87,7 +88,7 @@ export default function LoginPage() {
                     </div>
                     <CardTitle className="text-2xl font-bold">Welcome back</CardTitle>
                     <CardDescription>
-                        Enter your credentials to access your account
+                        Enter your credentials to access your Omari Finance account
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -121,14 +122,23 @@ export default function LoginPage() {
                                     Forgot password?
                                 </Link>
                             </div>
-                            <input
-                                type="password"
-                                id="password"
-                                value={formData.password}
-                                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                className={`flex h-10 w-full rounded-md border ${errors.password ? 'border-red-500' : 'border-input'} bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
-                                disabled={isLoading}
-                            />
+                            <div className="relative">
+                                <input
+                                    type={showPassword ? "text" : "password"}
+                                    id="password"
+                                    value={formData.password}
+                                    onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                                    className={`flex h-10 w-full rounded-md border ${errors.password ? 'border-red-500' : 'border-input'} bg-background px-3 py-2 text-sm pr-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+                                    disabled={isLoading}
+                                />
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPassword(!showPassword)}
+                                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                                >
+                                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                                </button>
+                            </div>
                             {errors.password && <p className="text-xs text-red-500">{errors.password}</p>}
                         </div>
                         <Button className="w-full" size="lg" disabled={isLoading}>

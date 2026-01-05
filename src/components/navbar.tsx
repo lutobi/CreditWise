@@ -16,14 +16,11 @@ export function Navbar() {
             <div className="container mx-auto px-4 md:px-6">
                 <div className="flex h-16 items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <Link href="/" className="flex items-center gap-2">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                                <CreditCard className="h-5 w-5" />
+                        <Link className="flex items-center justify-center gap-2" href="/">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold text-xl">
+                                O
                             </div>
-                            <div className="flex flex-col">
-                                <span className="text-xl font-bold tracking-tight text-primary">CreditWise</span>
-                                <span className="text-[10px] text-muted-foreground -mt-1">by Omari Finance</span>
-                            </div>
+                            <span className="text-xl font-bold tracking-tighter">Omari Finance</span>
                         </Link>
                     </div>
 
@@ -44,7 +41,7 @@ export function Navbar() {
                                 <div className="flex items-center gap-2 ml-2">
                                     <div className="flex items-center gap-2 mr-2 text-sm font-medium text-muted-foreground">
                                         <User className="h-4 w-4" />
-                                        <span className="max-w-[100px] truncate">{user.user_metadata.full_name || 'User'}</span>
+                                        <span className="max-w-[100px] truncate">{user.user_metadata?.full_name || 'User'}</span>
                                     </div>
                                     <Button variant="ghost" size="sm" onClick={() => signOut()}>
                                         <LogOut className="h-4 w-4 mr-2" />

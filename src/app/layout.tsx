@@ -17,8 +17,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "CreditWise - Unlock Your Financial Potential",
-  description: "Fast loans and credit verification in Namibia.",
+  title: "Omari Finance - Smart Loans & Credit Building",
+  description: "Get instant loans and build your credit score with Omari Finance. Fast, secure, and tailored for Namibia.",
 };
 
 export default function RootLayout({
