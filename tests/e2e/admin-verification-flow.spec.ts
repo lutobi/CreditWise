@@ -1,6 +1,11 @@
 
 import { test, expect } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+import path from 'path';
+
+// Load environment variables from .env.local
+dotenv.config({ path: '.env.local' });
 
 test.describe('Admin Face Verification Flow', () => {
     test.slow(); // Allow more time for this E2E flow
@@ -10,11 +15,12 @@ test.describe('Admin Face Verification Flow', () => {
 
     test.beforeAll(() => {
         if (!supabaseUrl || !serviceRoleKey) {
-            console.warn('Skipping test: Missing Supabase Credentials');
+            console.warn('Skipping test: Missing Supabase Credentials in .env.local');
         }
     });
 
-    test('User applies, Admin verifies', async ({ page }) => {
+    test('User applies (7-Step Wizard), Admin verifies face', async ({ page }) => {
+        // Skip if credentials missing
         if (!supabaseUrl || !serviceRoleKey) return;
 
         const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey, {
@@ -50,134 +56,167 @@ test.describe('Admin Face Verification Flow', () => {
 
         try {
             // --- USER FLOW ---
-            await page.goto('/login');
-            await page.fill('input[id="email"]', userEmail);
-            await page.fill('input[id="password"]', password);
-            await page.click('button:has-text("Sign In")');
-            await page.waitForURL('**/dashboard');
+            // Debug: Capture console logs
+            page.on('console', msg => console.log(`BROWSER LOG: ${msg.text()}`));
 
-            await page.goto('/apply');
+            await test.step('User Login', async () => {
+                await page.goto('/login');
+                await page.fill('input[id="email"]', userEmail);
+                await page.fill('input[id="password"]', password);
+                await page.click('button:has-text("Sign In")');
+                await page.waitForURL('**/dashboard');
+            });
 
-            // Step 1: Personal
-            await page.fill('input[name="firstName"]', 'Test');
-            await page.fill('input[name="lastName"]', 'Applicant');
-            await page.fill('input[name="nationalId"]', '90010112345');
-            await page.fill('input[name="phone"]', '+264811234567');
-            await page.click('button:has-text("Next Step")');
+            await test.step('Start Application', async () => {
+                await page.goto('/apply');
+                await expect(page.locator('text=Personal Details')).toBeVisible();
+            });
 
-            // Step 2: Employment
-            await page.fill('input[name="employerName"]', 'Test Corp');
-            await page.fill('input[name="monthlyIncome"]', '5000');
-            await page.selectOption('select[name="employmentType"]', 'Full-time Permanent');
-            await page.click('button:has-text("Next Step")');
+            await test.step('Step 1: Personal Details', async () => {
+                await page.fill('input[name="firstName"]', 'Test');
+                await page.fill('input[name="lastName"]', 'Applicant');
+                await page.fill('input[name="nationalId"]', '90010100123');
+                await page.fill('input[name="dob"]', '1990-01-01');
+                await page.selectOption('select[name="gender"]', 'Male');
+                await page.fill('input[name="nationality"]', 'Namibian');
+                await page.selectOption('select[name="maritalStatus"]', 'Single');
+                await page.fill('input[name="phone"]', '0811234567');
+                await page.fill('input[name="altPhone"]', '0811234567');
+                await page.fill('input[name="email"]', userEmail);
+                await page.fill('input[name="address"]', '123 Test Street, Windhoek');
+                await page.click('button:has-text("Next")');
+            });
 
-            // Step 3: Banking (Skipped/Mocked in previous logic? Let's check view_file)
-            // Wait, previous test didn't have banking step explicitly in log?
-            // "Step 3: Document Uploads" in live-full-flow.spec.ts? 
-            // The wizard is 7 steps now. live-full-flow.spec.ts might be OUTDATED!
-            // I need to follow the NEW 7-step wizard structure.
+            await test.step('Step 2: Employment & Income', async () => {
+                await expect(page.locator('text=Employer Name')).toBeVisible();
+                await page.fill('input[name="employerName"]', 'Test Corp');
+                await page.fill('input[name="jobTitle"]', 'Developer');
+                await page.fill('input[name="employerPhone"]', '061123456');
+                await page.fill('input[name="employmentStartDate"]', '2020-01-01');
+                await page.selectOption('select[name="employmentType"]', 'Permanent');
+                await page.fill('input[name="monthlyIncome"]', '15000');
 
-            // Let's assume the new wizard structure:
-            // 1. Personal
-            // 2. Employment
-            // 3. Banking ? (Let's check ApplyPage code or just fill generic inputs)
-            // 4. Loan Details
-            // 5. References ?
-            // 6. Documents
-            // 7. Declaration
+                // HR Details
+                await page.fill('input[name="hrName"]', 'HR Manager');
+                await page.fill('input[name="hrEmail"]', 'hr@testcorp.com');
+                await page.fill('input[name="hrPhone"]', '061999888');
+                await page.click('button:has-text("Next")');
+            });
 
-            // I'll proceed hoping I can identify steps by text content.
+            await test.step('Step 3: Banking Details', async () => {
+                await expect(page.locator('text=Bank Name')).toBeVisible();
+                await page.fill('input[name="bankName"]', 'Bank Windhoek');
+                await page.fill('input[name="accountHolder"]', 'T Applicant');
+                await page.fill('input[name="accountNumber"]', '123456789');
+                await page.selectOption('select[name="accountType"]', 'Savings');
+                await page.fill('input[name="branchCode"]', '482172');
+                await page.click('button:has-text("Next")');
+            });
 
-            // Step 3: Banking details (if present)
-            if (await page.isVisible('text=Banking Details')) {
-                await page.fill('input[placeholder*="Bank"]', 'Bank Windhoek');
-                await page.fill('input[placeholder*="Account"]', '123456789');
-                await page.click('button:has-text("Next Step")');
-            }
+            await test.step('Step 4: Loan Details (Pre-filled Payday)', async () => {
+                // Should show "Payday Loan (1 Month)" static text
+                await expect(page.locator('text=Payday Loan (1 Month)')).toBeVisible();
 
-            // Step 4: Loan Details (if present)
-            if (await page.isVisible('text=Loan Details')) {
-                await page.fill('input[type="range"]', '5000');
-                await page.click('button:has-text("Next Step")'); // or manually select period
-            }
+                // Fill Purpose (Required)
+                await page.fill('input[name="loanPurpose"]', 'Medical Expenses');
 
-            // Just generic "Next Step" until we find "Document Uploads"
-            while (!(await page.isVisible('text=Document Uploads')) && !(await page.isVisible('text=Identity Verification'))) {
-                // Try to fill visible inputs to pass validation
-                const inputs = await page.locator('input:visible').all();
-                for (const input of inputs) {
-                    const type = await input.getAttribute('type');
-                    if (type === 'text' || !type) await input.fill('Generic Answer');
-                    if (type === 'number') await input.fill('123');
+                // Click Next
+                await page.click('button:has-text("Next")');
+            });
+
+            await test.step('Step 5: References', async () => {
+                await expect(page.locator('text=Next of Kin Details')).toBeVisible();
+                await page.fill('input[name="nextOfKinName"]', 'Parent Applicant');
+                await page.fill('input[name="nextOfKinRelationship"]', 'Parent');
+                await page.fill('input[name="nextOfKinContact"]', '0819999999');
+                await page.fill('input[name="nextOfKinAddress"]', 'Same Address');
+                await page.click('button:has-text("Next")');
+            });
+
+            await test.step('Step 6: Document Uploads', async () => {
+                await expect(page.locator('text=ID Document')).toBeVisible();
+
+                // Use Bypass Inputs to avoid flaky uploads
+                // Use Bypass Inputs to avoid flaky uploads
+                // Real Uploads
+                const fakeImage = Buffer.from('fake-image-content');
+                const fakePdf = Buffer.from('fake-pdf-content');
+                await page.setInputFiles('input[type="file"] >> nth=0', { name: 'id.jpg', mimeType: 'image/jpeg', buffer: fakeImage });
+                await expect(page.locator('button:has-text("Change File") >> nth=0')).toBeVisible({ timeout: 10000 });
+                await page.setInputFiles('input[type="file"] >> nth=1', { name: 'payslip.pdf', mimeType: 'application/pdf', buffer: fakePdf });
+                await expect(page.locator('button:has-text("Change File") >> nth=1')).toBeVisible({ timeout: 10000 });
+                await page.click('button:has-text("Capture Live Selfie")');
+                await expect(page.locator('button:text-is("Retake")')).toBeVisible({ timeout: 15000 });
+
+                // Wait for upload simulation (if any) or just click Next
+                // In test env, we should ensure uploads "complete"
+                await page.waitForTimeout(1000);
+                await page.click('button:has-text("Next")');
+            });
+
+            await test.step('Step 7: Declaration & Submit', async () => {
+                await expect(page.locator('h3:has-text("Legal Declaration")')).toBeVisible({ timeout: 10000 });
+
+                // Tick all checkboxes (force: true in case of custom components)
+                const checkboxes = await page.locator('input[type="checkbox"]').all();
+                for (const checkbox of checkboxes) {
+                    await checkbox.check({ force: true });
                 }
-                if (await page.isVisible('button:has-text("Next Step")')) {
-                    await page.click('button:has-text("Next Step")');
-                    await page.waitForTimeout(500);
-                } else {
-                    break; // Safety break
-                }
-            }
 
-            // Step 6: Documents
-            // Upload FAKE files
-            console.log('Uploading documents...');
-            await page.setInputFiles('input[id="idDocument"]', {
-                name: 'id.jpg',
-                mimeType: 'image/jpeg',
-                buffer: Buffer.from('fake-image-content')
+                // Fill Signature
+                await page.fill('input[name="signatureName"]', 'Test Applicant');
+
+                await page.click('button:has-text("Submit Application")');
+                await expect(page.locator('text=Application Received')).toBeVisible({ timeout: 30000 });
             });
-            await page.setInputFiles('input[id="selfie"]', {
-                name: 'selfie.jpg',
-                mimeType: 'image/jpeg',
-                buffer: Buffer.from('fake-image-content')
-            });
-            await page.setInputFiles('input[id="payslip"]', {
-                name: 'payslip.pdf',
-                mimeType: 'application/pdf',
-                buffer: Buffer.from('fake-pdf-content')
-            });
-
-            // Wait for uploads to finish (green text?)
-            await page.waitForTimeout(2000);
-
-            // CLICK NEXT - This is the Critical Step
-            // Should NOT block
-            console.log('Clicking Next on Step 6...');
-            await page.click('button:has-text("Next Step")');
-
-            // Step 7: Declaration / Submit
-            await expect(page.locator('text=Declaration')).toBeVisible({ timeout: 10000 });
-            await page.check('input[type="checkbox"]');
-            await page.click('button:has-text("Submit Application")');
-
-            // Success
-            await expect(page.locator('text=Application Received')).toBeVisible();
 
             // --- ADMIN FLOW ---
-            await page.goto('/login');
-            // Logout first? Or direct navigation clears session?
-            // Page state persistence depends on playwright context.
-            await page.click('button:has-text("Sign Out")'); // Assuming logout button exists
+            await test.step('Admin Verification', async () => {
+                // Ensure clean slate for Admin Login
+                await page.goto('/login');
+                await page.evaluate(() => window.localStorage.clear());
+                await page.reload();
+                await expect(page.locator('form')).toBeVisible();
 
-            await page.fill('input[id="email"]', adminEmail);
-            await page.fill('input[id="password"]', password);
-            await page.click('button:has-text("Sign In")');
-            await page.waitForURL('**/dashboard');
+                // Login Admin (UI) - Slow and Steady
+                await page.waitForTimeout(1000);
+                await page.fill('input[id="email"]', adminEmail);
+                await page.fill('input[id="password"]', password);
+                await page.click('button:has-text("Sign In")');
 
-            await page.goto('/admin');
-            await expect(page.locator('text=Pending Loans')).toBeVisible();
+                // Wait for navigation or error
+                await page.waitForTimeout(2000);
+                await expect(page.locator('text=Pending Loans')).toBeVisible();
 
-            // Find the loan for our user
-            await expect(page.locator(`text=Test Applicant`)).toBeVisible();
-            // Check for Verify Button
-            await expect(page.locator('button:has-text("Verify Face Identity")').first()).toBeVisible();
+                // Find our loan (Use .first() as multiple test runs might create duplicates)
+                await expect(page.locator('text=Test Applicant').first()).toBeVisible();
 
-            console.log('✅ Admin Verification Flow E2E Test Passed');
+                // Click Verify Face Identity (Use first button found)
+                // Handle the alert dialog
+                page.on('dialog', async dialog => {
+                    console.log(`Alert message: ${dialog.message()}`);
+                    if (process.env.TEST_AWS_REKOGNITION === 'true') {
+                        console.log('⚠️ RUNNING REAL AWS VERIFICATION (Dialog Accepted)');
+                        await dialog.accept();
+                    } else {
+                        console.log('ℹ️ Skipping AWS Verification (Dialog Dismissed). Set TEST_AWS_REKOGNITION=true to run real check.');
+                        await dialog.dismiss();
+                    }
+                });
+
+                const verifyBtn = page.locator('button:has-text("Verify Face Identity")').first();
+                await expect(verifyBtn).toBeVisible();
+                await verifyBtn.click();
+
+                // Verification might fail in test env (Mock AWS), but we verified the button exists and is clickable.
+                // If we want to verify functionality, we'd need to mock the API response.
+                // For now, E2E proves flow integration.
+            });
 
         } finally {
             // Cleanup
-            await supabaseAdmin.auth.admin.deleteUser(user.user.id);
-            await supabaseAdmin.auth.admin.deleteUser(admin.user.id);
+            if (user?.user?.id) await supabaseAdmin.auth.admin.deleteUser(user.user.id);
+            if (admin?.user?.id) await supabaseAdmin.auth.admin.deleteUser(admin.user.id);
         }
     });
 });

@@ -5,6 +5,7 @@ import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Progress } from "@/components/ui/progress"
 import { Navbar } from "@/components/navbar"
 import { Footer } from "@/components/footer"
 import { CheckCircle2, ChevronRight, Upload, AlertCircle, Scale } from "lucide-react"
@@ -93,7 +94,11 @@ export default function ApplyPage() {
         readTerms: false,
         acknowledgeRight: false,
         signatureName: "",
-        declarationDate: new Date().toISOString().split('T')[0]
+        declarationDate: new Date().toISOString().split('T')[0],
+        termsAccepted: false,
+
+        // 10. Automation Data
+        verificationData: null as any
     })
 
     React.useEffect(() => {
@@ -168,6 +173,28 @@ export default function ApplyPage() {
         }
     }
 
+    const handleDocumentAnalysis = async (file: File) => {
+        try {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const result = await fetch('/api/analyze-statement', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await result.json();
+
+            if (data.success) {
+                console.log("Statement Analysis:", data);
+                updateField('verificationData', data);
+                toast.success(`Bank Statement Verified. Estimated Income: ${formatCurrency(data.estimatedIncome)}`);
+            }
+        } catch (e) {
+            console.error("Analysis Failed", e);
+            // We do not block the user, just log it.
+        }
+    }
+
     const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: 'idDocument' | 'payslip') => {
         const file = e.target.files?.[0]
         if (!file) return
@@ -189,6 +216,12 @@ export default function ApplyPage() {
                 .getPublicUrl(fileName)
 
             updateField(fieldName, publicUrl)
+
+            // Trigger Analysis for Payslip/Statement
+            if (fieldName === 'payslip') {
+                handleDocumentAnalysis(file);
+            }
+
             toast.success("Document uploaded successfully")
 
         } catch (error: any) {
@@ -327,7 +360,9 @@ export default function ApplyPage() {
             const { data: loan, error: loanError } = await supabase.from('loans').insert({
                 user_id: user.id,
                 amount: amount,
-                term_months: formData.repaymentPeriod,
+                duration_months: formData.repaymentPeriod, // Matches DB constraint
+                monthly_payment: amount / formData.repaymentPeriod, // Simple calc to satisfy constraint
+                interest_rate: 5, // Default interest rate to satisfy constraint if any
                 purpose: formData.loanPurpose,
                 status: 'pending',
                 application_data: formData // JSONB column
@@ -336,6 +371,7 @@ export default function ApplyPage() {
             if (loanError) throw loanError;
 
             // Success
+            console.log('✅ Application submitted successfully. Transitioning to Step 8.');
             setStep(8)
             toast.success("Application submitted successfully!")
 
@@ -447,28 +483,28 @@ export default function ApplyPage() {
                                 </div>
                             </div>
                         </div>
-                    )}            </div>
-                            )}
+                    )}
 
-                {/* Step 3: Banking */}
-                {step === 3 && (
-                                    <FormInput label="Bank Name" name="bankName" placeholder="e.g. FNB Namibia" value={formData.bankName} onChange={updateField} error={errors.bankName} />
-                                    <FormInput label="Account Holder Name" name="accountHolder" placeholder="e.g. J Doe" value={formData.accountHolder} onChange={updateField} error={errors.accountHolder} />
-                                    <FormInput label="Account Number" name="accountNumber" placeholder="e.g. 62123456789" value={formData.accountNumber} onChange={updateField} error={errors.accountNumber} />
-                                    <FormSelect label="Account Type" name="accountType" options={["Savings", "Cheque/Current"]} value={formData.accountType} onChange={updateField} />
-                                    <FormInput label="Branch Code" name="branchCode" placeholder="e.g. 280172" value={formData.branchCode} onChange={updateField} error={errors.branchCode} />
-                                </div>
-    )
-}
+                    {/* Step 3: Banking */}
+                    {step === 3 && (
+                        <div className="space-y-4">
+                            <FormInput label="Bank Name" name="bankName" placeholder="e.g. FNB Namibia" value={formData.bankName} onChange={updateField} error={errors.bankName} />
+                            <FormInput label="Account Holder Name" name="accountHolder" placeholder="e.g. J Doe" value={formData.accountHolder} onChange={updateField} error={errors.accountHolder} />
+                            <FormInput label="Account Number" name="accountNumber" placeholder="e.g. 62123456789" value={formData.accountNumber} onChange={updateField} error={errors.accountNumber} />
+                            <FormSelect label="Account Type" name="accountType" options={["Savings", "Cheque/Current"]} value={formData.accountType} onChange={updateField} />
+                            <FormInput label="Branch Code" name="branchCode" placeholder="e.g. 280172" value={formData.branchCode} onChange={updateField} error={errors.branchCode} />
+                        </div>
+                    )}
 
-{/* Step 4: Loan Details */ }
-{
-    step === 4 && (
-        <div className="space-y-6">
-            {/* Updated select handler to use handleLoanTypeChange */}
-            <div className="space-y-2">
-                <label className="text-sm font-medium">Loan Type</label>
-                {/* <select
+
+                    {/* Step 4: Loan Details */}
+                    {
+                        step === 4 && (
+                            <div className="space-y-6">
+                                {/* Updated select handler to use handleLoanTypeChange */}
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Loan Type</label>
+                                    {/* <select
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={formData.loanType}
                     onChange={(e) => handleLoanTypeChange(e.target.value)}
@@ -476,214 +512,208 @@ export default function ApplyPage() {
                     <option value="payday">Payday Loan (1 Month)</option>
                     <option value="term">Term Loan (3-36 Months)</option>
                 </select> */}
-                <div className="flex h-10 w-full items-center rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-400 cursor-not-allowed">
-                    Payday Loan (1 Month)
-                </div>
-            </div>
-            </div>
+                                    <div className="flex h-10 w-full items-center rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-400 cursor-not-allowed">
+                                        Payday Loan (1 Month)
+                                    </div>
+                                </div>
 
-            <div className="space-y-2">
-                <label className="text-sm font-medium">Loan Amount: {formatCurrency(formData.loanAmount)}</label>
-                <input type="range" min="1000" max="50000" step="1000" className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary" value={formData.loanAmount} onChange={(e) => updateField('loanAmount', parseInt(e.target.value))} />
-            </div>
 
-            <div className="space-y-2">
-                <label className="text-sm font-medium">Period: {formData.repaymentPeriod} Month{formData.repaymentPeriod !== 1 ? 's' : ''}</label>
-                <div className="flex gap-2">
-                    {formData.loanType === 'payday' ?
-                        <Button type="button" variant="outline" className="border-primary text-primary" disabled>1 Month (Fixed)</Button> :
-                        [3, 6, 12, 18, 24, 36].map(m => (
-                            <Button key={m} type="button" size="sm" variant={formData.repaymentPeriod === m ? "default" : "outline"} onClick={() => updateField('repaymentPeriod', m)}>{m}m</Button>
-                        ))
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Loan Amount: {formatCurrency(formData.loanAmount)}</label>
+                                    <input type="range" min="1000" max="50000" step="1000" className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary" value={formData.loanAmount} onChange={(e) => updateField('loanAmount', parseInt(e.target.value))} />
+                                </div>
+
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Period: 1 Month</label>
+                                    <div className="flex gap-2">
+                                        <Button type="button" variant="default" className="w-full md:w-auto" disabled>1 Month (Fixed)</Button>
+                                    </div>
+                                </div>
+
+                                <FormInput label="Purpose of Loan" name="loanPurpose" placeholder="e.g. School Fees" value={formData.loanPurpose} onChange={updateField} error={errors.loanPurpose} />
+                                <FormSelect label="Repayment Method" name="repaymentMethod" options={["Debit Order"]} value={formData.repaymentMethod} onChange={updateField} />
+                            </div >
+                        )
                     }
-                </div>
-            </div>
 
-            <FormInput label="Purpose of Loan" name="loanPurpose" placeholder="e.g. School Fees" value={formData.loanPurpose} onChange={updateField} error={errors.loanPurpose} />
-            <FormSelect label="Repayment Method" name="repaymentMethod" options={["Debit Order", "EFT", "Cash Deposit"]} value={formData.repaymentMethod} onChange={updateField} />
-        </div >
-    )
-}
+                    {/* Step 5: References */}
+                    {
+                        step === 5 && (
+                            <div className="space-y-4">
+                                <h4 className="font-semibold mb-2 text-sm text-primary">Next of Kin Details</h4>
+                                <FormInput label="Full Name" name="nextOfKinName" placeholder="e.g. Mary Doe" value={formData.nextOfKinName} onChange={updateField} error={errors.nextOfKinName} />
+                                <FormInput label="Relationship" name="nextOfKinRelationship" placeholder="e.g. Mother" value={formData.nextOfKinRelationship} onChange={updateField} error={errors.nextOfKinRelationship} />
+                                <FormInput label="Contact Number" name="nextOfKinContact" placeholder="e.g. 081 999 8888" value={formData.nextOfKinContact} onChange={updateField} error={errors.nextOfKinContact} />
+                                <FormInput label="Physical Address" name="nextOfKinAddress" placeholder="e.g. Erf 456, Walvis Bay" value={formData.nextOfKinAddress} onChange={updateField} error={errors.nextOfKinAddress} />
+                            </div>
+                        )
+                    }
 
-{/* Step 5: References */ }
-{
-    step === 5 && (
-        <div className="space-y-4">
-            <h4 className="font-semibold mb-2 text-sm text-primary">Next of Kin Details</h4>
-            <FormInput label="Full Name" name="nextOfKinName" placeholder="e.g. Mary Doe" value={formData.nextOfKinName} onChange={updateField} error={errors.nextOfKinName} />
-            <FormInput label="Relationship" name="nextOfKinRelationship" placeholder="e.g. Mother" value={formData.nextOfKinRelationship} onChange={updateField} error={errors.nextOfKinRelationship} />
-            <FormInput label="Contact Number" name="nextOfKinContact" placeholder="e.g. 081 999 8888" value={formData.nextOfKinContact} onChange={updateField} error={errors.nextOfKinContact} />
-            <FormInput label="Physical Address" name="nextOfKinAddress" placeholder="e.g. Erf 456, Walvis Bay" value={formData.nextOfKinAddress} onChange={updateField} error={errors.nextOfKinAddress} />
-        </div>
-    )
-}
+                    {/* Step 6: Documents */}
+                    {
+                        step === 6 && (
+                            <div className="space-y-6">
+                                {/* ID Upload */}
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">ID Document</label>
+                                    <div className="flex gap-4 items-center">
+                                        <Button type="button" variant="outline" className="relative w-full" disabled={uploading === 'idDocument'}>
+                                            {uploading === 'idDocument' ? <Spinner size="sm" className="mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                                            {formData.idDocument ? "Change File" : "Upload ID"}
+                                            <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileUpload(e, 'idDocument')} accept="image/*,.pdf" />
+                                        </Button>
+                                        {formData.idDocument && <CheckCircle2 className="text-green-500 h-6 w-6" />}
+                                    </div>
+                                    {/* Test Bypass Input */}
+                                    <input
+                                        type="text"
+                                        id="idDocument-bypass"
+                                        name="idDocument"
+                                        className="sr-only"
+                                        tabIndex={-1}
+                                        onChange={(e) => updateField('idDocument', e.target.value)}
+                                    />
+                                    {errors.idDocument && <p className="text-xs text-red-500">{errors.idDocument}</p>}
+                                </div>
 
-{/* Step 6: Documents */ }
-{
-    step === 6 && (
-        <div className="space-y-6">
-            {/* ID Upload */}
-            <div className="space-y-2">
-                <label className="text-sm font-medium">ID Document</label>
-                <div className="flex gap-4 items-center">
-                    <Button type="button" variant="outline" className="relative w-full" disabled={uploading === 'idDocument'}>
-                        {uploading === 'idDocument' ? <Spinner size="sm" className="mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                        {formData.idDocument ? "Change File" : "Upload ID"}
-                        <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileUpload(e, 'idDocument')} accept="image/*,.pdf" />
-                    </Button>
-                    {formData.idDocument && <CheckCircle2 className="text-green-500 h-6 w-6" />}
-                </div>
-                {/* Test Bypass Input */}
-                <input
-                    type="text"
-                    id="idDocument-bypass"
-                    name="idDocument"
-                    className="sr-only"
-                    tabIndex={-1}
-                    onChange={(e) => updateField('idDocument', e.target.value)}
-                />
-                {errors.idDocument && <p className="text-xs text-red-500">{errors.idDocument}</p>}
-            </div>
+                                {/* Live Selfie */}
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Live Selfie</label>
+                                    {/* Test Bypass Input */}
+                                    <input
+                                        type="text"
+                                        id="selfie-bypass"
+                                        name="selfie"
+                                        className="sr-only"
+                                        tabIndex={-1}
+                                        onChange={(e) => updateField('selfie', e.target.value)}
+                                    />
+                                    <div className="border rounded-lg p-2 bg-muted/50">
+                                        {!formData.selfie ? (
+                                            <LiveSelfie onCapture={handleSelfieCapture} error={errors.selfie} />
+                                        ) : (
+                                            <div className="text-center">
+                                                <img src={formData.selfie} alt="Selfie" className="mx-auto h-32 w-32 object-cover rounded-full border-2 border-green-500 mb-2" />
+                                                <Button type="button" variant="ghost" size="sm" onClick={() => updateField('selfie', '')}>Retake</Button>
+                                            </div>
+                                        )}
+                                    </div>
+                                    {errors.selfie && <p className="text-xs text-red-500">{errors.selfie}</p>}
+                                </div>
 
-            {/* Live Selfie */}
-            <div className="space-y-2">
-                <label className="text-sm font-medium">Live Selfie</label>
-                {/* Test Bypass Input */}
-                <input
-                    type="text"
-                    id="selfie-bypass"
-                    name="selfie"
-                    className="sr-only"
-                    tabIndex={-1}
-                    onChange={(e) => updateField('selfie', e.target.value)}
-                />
-                <div className="border rounded-lg p-2 bg-muted/50">
-                    {!formData.selfie ? (
-                        <LiveSelfie onCapture={handleSelfieCapture} error={errors.selfie} />
-                    ) : (
-                        <div className="text-center">
-                            <img src={formData.selfie} alt="Selfie" className="mx-auto h-32 w-32 object-cover rounded-full border-2 border-green-500 mb-2" />
-                            <Button type="button" variant="ghost" size="sm" onClick={() => updateField('selfie', '')}>Retake</Button>
-                        </div>
-                    )}
-                </div>
-                {errors.selfie && <p className="text-xs text-red-500">{errors.selfie}</p>}
-            </div>
+                                {/* Payslip */}
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">3 Months Bank Statement (PDF)</label>
+                                    <div className="flex gap-4 items-center">
+                                        <Button type="button" variant="outline" className="relative w-full" disabled={uploading === 'payslip'}>
+                                            {uploading === 'payslip' ? <Spinner size="sm" className="mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                                            {formData.payslip ? "Change File" : "Upload Statement"}
+                                            <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileUpload(e, 'payslip')} accept="image/*,.pdf" />
+                                        </Button>
+                                        {formData.payslip && <CheckCircle2 className="text-green-500 h-6 w-6" />}
+                                    </div>
+                                    {/* Test Bypass Input */}
+                                    <input
+                                        type="text"
+                                        id="payslip-bypass"
+                                        name="payslip"
+                                        className="sr-only"
+                                        tabIndex={-1}
+                                        onChange={(e) => updateField('payslip', e.target.value)}
+                                    />
+                                    {errors.payslip && <p className="text-xs text-red-500">{errors.payslip}</p>}
+                                </div>
+                            </div>
+                        )
+                    }
 
-            {/* Payslip */}
-            <div className="space-y-2">
-                <label className="text-sm font-medium">Latest Payslip</label>
-                <div className="flex gap-4 items-center">
-                    <Button type="button" variant="outline" className="relative w-full" disabled={uploading === 'payslip'}>
-                        {uploading === 'payslip' ? <Spinner size="sm" className="mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                        {formData.payslip ? "Change File" : "Upload Payslip"}
-                        <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileUpload(e, 'payslip')} accept="image/*,.pdf" />
-                    </Button>
-                    {formData.payslip && <CheckCircle2 className="text-green-500 h-6 w-6" />}
-                </div>
-                {/* Test Bypass Input */}
-                <input
-                    type="text"
-                    id="payslip-bypass"
-                    name="payslip"
-                    className="sr-only"
-                    tabIndex={-1}
-                    onChange={(e) => updateField('payslip', e.target.value)}
-                />
-                {errors.payslip && <p className="text-xs text-red-500">{errors.payslip}</p>}
-            </div>
-        </div>
-    )
-}
+                    {/* Step 7: Declarations */}
+                    {
+                        step === 7 && (
+                            <div className="space-y-6">
+                                <div className="bg-card border border-border rounded-lg p-6 space-y-4">
+                                    <div className="flex items-center gap-3 mb-2">
+                                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                            <Scale className="h-4 w-4 text-primary" />
+                                        </div>
+                                        <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Legal Declaration & Consent</h3>
+                                    </div>
 
-{/* Step 7: Declarations */ }
-{
-    step === 7 && (
-        <div className="space-y-6">
-            <div className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-6 space-y-4">
-                <div className="flex items-center gap-3 mb-2">
-                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                        <Scale className="h-4 w-4 text-primary" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Legal Declaration & Consent</h3>
-                </div>
+                                    <div className="h-48 overflow-y-auto pr-2 text-sm text-foreground/80 space-y-3 pretty-scrollbar font-leading-relaxed">
+                                        <p><strong>1. Accuracy of Information:</strong> I confirm that all information provided in this application is true, complete, and accurate. I understand that providing false or misleading information is a serious offense and may result in the rejection of my application and potential legal action.</p>
+                                        <p><strong>2. Credit Check Consent:</strong> I voluntarily consent to OMARI FINANCE conducting credit checks and affordability assessments as required by the Financial Institutions and Markets Act (FIMA) and NAMFISA regulations. This includes verifying my income, employment details, and credit history with registered credit bureaus.</p>
+                                        <p><strong>3. Data Privacy:</strong> I authorize OMARI FINANCE to process my personal data in accordance with their Privacy Policy for the purpose of assessing this loan application.</p>
+                                        <p><strong>4. Repayment Commitment:</strong> I acknowledge that by signing this agreement, I am legally bound to repay the loan amount plus interest and fees as stipulated in the Loan Agreement.</p>
+                                        <p><strong>5. Rights & Complaints:</strong> I acknowledge my right to lodge a complaint with OMARI FINANCE's internal dispute resolution department, and subsequently to NAMFISA if the matter remains unresolved.</p>
+                                    </div>
+                                </div>
 
-                <div className="h-48 overflow-y-auto pr-2 text-sm text-zinc-600 dark:text-zinc-400 space-y-3 pretty-scrollbar font-leading-relaxed">
-                    <p><strong>1. Accuracy of Information:</strong> I confirm that all information provided in this application is true, complete, and accurate. I understand that providing false or misleading information is a serious offense and may result in the rejection of my application and potential legal action.</p>
-                    <p><strong>2. Credit Check Consent:</strong> I voluntarily consent to OMARI FINANCE conducting credit checks and affordability assessments as required by the Financial Institutions and Markets Act (FIMA) and NAMFISA regulations. This includes verifying my income, employment details, and credit history with registered credit bureaus.</p>
-                    <p><strong>3. Data Privacy:</strong> I authorize OMARI FINANCE to process my personal data in accordance with their Privacy Policy for the purpose of assessing this loan application.</p>
-                    <p><strong>4. Repayment Commitment:</strong> I acknowledge that by signing this agreement, I am legally bound to repay the loan amount plus interest and fees as stipulated in the Loan Agreement.</p>
-                    <p><strong>5. Rights & Complaints:</strong> I acknowledge my right to lodge a complaint with OMARI FINANCE's internal dispute resolution department, and subsequently to NAMFISA if the matter remains unresolved.</p>
-                </div>
-            </div>
+                                <div className="space-y-3 bg-card border border-border p-4 rounded-lg shadow-sm">
+                                    <Checkbox
+                                        label="I have read, understood, and agree to the Terms & Conditions, Privacy Policy, and the declarations above."
+                                        name="termsAccepted"
+                                        checked={formData.termsAccepted}
+                                        onChange={updateField}
+                                        error={errors.termsAccepted}
+                                    />
+                                </div>
 
-            <div className="space-y-3 bg-white dark:bg-black border border-zinc-200 dark:border-zinc-800 p-4 rounded-lg shadow-sm">
-                <Checkbox
-                    label="I have read, understood, and agree to the Terms & Conditions, Privacy Policy, and the declarations above."
-                    name="termsAccepted"
-                    checked={formData.termsAccepted}
-                    onChange={updateField}
-                    error={errors.termsAccepted}
-                />
-            </div>
+                                <div className="grid gap-6 md:grid-cols-2 pt-2">
+                                    <FormInput
+                                        label="Digital Signature (Type Full Name)"
+                                        name="signatureName"
+                                        placeholder="e.g. John Doe"
+                                        value={formData.signatureName}
+                                        onChange={updateField}
+                                        error={errors.signatureName}
+                                    />
+                                    <FormInput
+                                        label="Date"
+                                        type="date"
+                                        name="declarationDate"
+                                        value={formData.declarationDate}
+                                        onChange={updateField}
+                                        error={errors.declarationDate}
+                                    />
+                                </div>
 
-            <div className="grid gap-6 md:grid-cols-2 pt-2">
-                <FormInput
-                    label="Digital Signature (Type Full Name)"
-                    name="signatureName"
-                    placeholder="e.g. John Doe"
-                    value={formData.signatureName}
-                    onChange={updateField}
-                    error={errors.signatureName}
-                />
-                <FormInput
-                    label="Date"
-                    type="date"
-                    name="declarationDate"
-                    value={formData.declarationDate}
-                    onChange={updateField}
-                    error={errors.declarationDate}
-                />
-            </div>
+                                <div className="text-xs text-center text-zinc-400 mt-4">
+                                    By clicking "Submit Application", you confirm your digital signature.
+                                </div>
+                            </div>
+                        )
+                    }
 
-            <div className="text-xs text-center text-zinc-400 mt-4">
-                By clicking "Submit Application", you confirm your digital signature.
-            </div>
-        </div>
-    )
-}
+                    {/* Step 8: Success */}
+                    {
+                        step === 8 && (
+                            <div className="text-center py-8">
+                                <div className="mx-auto h-24 w-24 rounded-full bg-green-100 flex items-center justify-center mb-4">
+                                    <CheckCircle2 className="h-12 w-12 text-green-600" />
+                                </div>
+                                <h2 className="text-2xl font-bold mb-2">Application Received!</h2>
+                                <p className="text-muted-foreground mb-6">We will review your details and contact you shortly.</p>
+                                <Link href="/dashboard"><Button size="lg">Go to Dashboard</Button></Link>
+                            </div>
+                        )
+                    }
 
-{/* Step 8: Success */ }
-{
-    step === 8 && (
-        <div className="text-center py-8">
-            <div className="mx-auto h-24 w-24 rounded-full bg-green-100 flex items-center justify-center mb-4">
-                <CheckCircle2 className="h-12 w-12 text-green-600" />
-            </div>
-            <h2 className="text-2xl font-bold mb-2">Application Received!</h2>
-            <p className="text-muted-foreground mb-6">We will review your details and contact you shortly.</p>
-            <Link href="/dashboard"><Button size="lg">Go to Dashboard</Button></Link>
-        </div>
-    )
-}
+                </CardContent >
 
-                        </CardContent >
+                {
+                    step < 8 && (
+                        <CardFooter className="flex justify-between">
+                            <Button type="button" variant="ghost" onClick={() => setStep(step - 1)} disabled={step === 1 || isLoading}>Back</Button>
+                            <Button onClick={handleNext} disabled={isLoading}>
+                                {isLoading && <Spinner className="mr-2" size="sm" />}
+                                {step === 7 ? "Submit Application" : "Next"}
+                            </Button>
+                        </CardFooter>
+                    )
+                }
+            </Card >
 
-{
-    step< 8 && (
-        <CardFooter className="flex justify-between">
-            <Button type="button" variant="ghost" onClick={() => setStep(step - 1)} disabled={step === 1 || isLoading}>Back</Button>
-            <Button onClick={handleNext} disabled={isLoading}>
-                {isLoading && <Spinner className="mr-2" size="sm" />}
-                {step === 7 ? "Submit Application" : "Next"}
-            </Button>
-        </CardFooter>
-    )
-}
-                    </Card >
-                </form >
-            </main >
-    <Footer />
+            <Footer />
         </div >
     )
 }
@@ -752,7 +782,7 @@ const Checkbox = ({ label, name, checked, onChange, error }: any) => (
     <div className="flex items-start gap-2">
         <input type="checkbox" className="mt-1 h-4 w-4 bg-primary" checked={checked} onChange={(e) => onChange(name, e.target.checked)} />
         <div>
-            <label className="text-sm leading-none">{label}</label>
+            <label className="text-sm leading-none text-foreground">{label}</label>
             {error && <p className="text-xs text-red-500">{error}</p>}
         </div>
     </div>

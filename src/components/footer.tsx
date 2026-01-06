@@ -20,9 +20,7 @@ export function Footer() {
                     <div>
                         <h3 className="mb-2 text-sm font-semibold">Products</h3>
                         <ul className="space-y-2 text-sm text-muted-foreground">
-                            <li><Link href="/products/personal-loans" className="hover:text-primary">Personal Loans</Link></li>
                             <li><Link href="/products/payday-loans" className="hover:text-primary">Payday Loans</Link></li>
-                            <li><Link href="/products/credit-checks" className="hover:text-primary">Credit Check</Link></li>
                         </ul>
                     </div>
                     <div>

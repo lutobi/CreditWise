@@ -68,10 +68,7 @@ function LoanCalculatorWidget() {
   return (
     <Card className="relative border-2 border-primary/20 shadow-2xl bg-white dark:bg-slate-950 z-10">
       <CardHeader>
-        <CardTitle className="text-3xl font-extrabold text-slate-900 dark:text-white">Loan Calculator</CardTitle>
-        <CardDescription className="text-base font-medium text-slate-600 dark:text-slate-300">
-          Compare our loan options
-        </CardDescription>
+        <CardTitle className="text-3xl font-extrabold text-slate-900 dark:text-white">Payday Loan Calculator</CardTitle>
       </CardHeader>
       <CardContent className="space-y-6">
         {/* Loan Type Toggle - HIDDEN FOR PAYDAY FOCUS */}
@@ -131,40 +128,22 @@ function LoanCalculatorWidget() {
           </div>
         </div>
 
-        {/* Duration Slider */}
+        {/* Duration Display (Static) */}
         <div className="space-y-3">
           <div className="flex justify-between text-sm font-bold">
             <span className="text-slate-900 dark:text-white">Duration</span>
-            <span className="text-primary font-bold text-lg">{months} Month{months !== 1 ? 's' : ''}</span>
+            <span className="text-primary font-bold text-lg">1 Month</span>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-xs font-medium text-muted-foreground w-12 text-right">
-              {loanType === 'payday' ? '1m' : '3m'}
-            </span>
-            <input
-              type="range"
-              min={loanType === 'payday' ? 1 : 3}
-              max={loanType === 'payday' ? 1 : 36}
-              step="1"
-              value={months}
-              onChange={(e) => setMonths(Number(e.target.value))}
-              className="flex-1 h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-secondary"
-            />
-            <span className="text-xs font-medium text-muted-foreground w-12">
-              {loanType === 'payday' ? '1m' : '36m'}
-            </span>
+          <div className="w-full bg-muted rounded-lg p-3 text-center text-sm font-medium text-muted-foreground">
+            Payday Loan (Fixed Term)
           </div>
         </div>
 
         {/* Result Display */}
         <div className="rounded-xl bg-primary/10 p-4 space-y-2 border border-primary/20">
           <div className="flex justify-between items-center">
-            <span className="text-sm font-bold text-slate-900 dark:text-white">Monthly Payment</span>
-            <span className="text-3xl font-bold text-primary">{formatCurrency(Math.ceil(monthlyPayment))}</span>
-          </div>
-          <div className="flex justify-between text-xs text-slate-600 dark:text-slate-400 pt-2 border-t border-primary/10">
-            <span>Total Repayment</span>
-            <span className="font-semibold">{formatCurrency(Math.ceil(totalRepayment))}</span>
+            <span className="text-sm font-bold text-slate-900 dark:text-white">Total Repayment</span>
+            <span className="text-3xl font-bold text-primary">{formatCurrency(Math.ceil(totalRepayment))}</span>
           </div>
         </div>
 

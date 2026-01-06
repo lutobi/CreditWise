@@ -105,9 +105,10 @@ export const documentUploadSchema = z.object({
 })
 
 // Section 8: Declarations
-termsAccepted: z.literal(true, { message: 'You must review and accept the terms and conditions' }),
+export const declarationSchema = z.object({
+    termsAccepted: z.literal(true, { message: 'You must review and accept the terms and conditions' }),
     signatureName: z.string().min(2, 'Please type your full name as signature'),
-        declarationDate: z.string().min(1, 'Date is required'),
+    declarationDate: z.string().min(1, 'Date is required'),
 })
 
 // Type exports
