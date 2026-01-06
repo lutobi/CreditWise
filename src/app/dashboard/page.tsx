@@ -11,8 +11,6 @@ import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
 import { formatCurrency } from "@/lib/utils"
 
-credit_score: number
-}
 
 type VerificationData = {
     is_employed: boolean
@@ -126,16 +124,15 @@ export default function DashboardPage() {
                             <TrendingUp className="h-4 w-4 text-muted-foreground" />
                         </CardHeader>
                         <CardContent>
-                            <CardContent>
-                                <div className="text-2xl font-bold">
-                                    {verification?.credit_score ? verification.credit_score : '--'}
-                                </div>
-                                <p className="text-xs text-muted-foreground">
-                                    {verification?.credit_score
-                                        ? (verification.credit_score > 700 ? 'Excellent' : verification.credit_score > 600 ? 'Good' : 'Fair')
-                                        : 'Pending Verification'}
-                                </p>
-                            </CardContent>
+                            <div className="text-2xl font-bold">
+                                {verification?.credit_score ? verification.credit_score : '--'}
+                            </div>
+                            <p className="text-xs text-muted-foreground">
+                                {verification?.credit_score
+                                    ? (verification.credit_score > 700 ? 'Excellent' : verification.credit_score > 600 ? 'Good' : 'Fair')
+                                    : 'Pending Verification'}
+                            </p>
+                        </CardContent>
                     </Card>
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
