@@ -239,7 +239,7 @@ export default function DashboardPage() {
                             <div className="space-y-4">
                                 {loans.filter(l => l.status === 'approved').map((loan) => (
                                     <Card key={loan.id} className="border-none shadow-sm">
-                                        <CardContent className="flex items-center justify-between p-4">
+                                        <CardContent className="flex flex-col md:flex-row md:items-center justify-between p-4 gap-4">
                                             <div className="flex flex-col gap-1">
                                                 <span className="font-bold">{formatCurrency(loan.amount)}</span>
                                                 <div className="flex items-center gap-2 text-sm">
@@ -250,7 +250,7 @@ export default function DashboardPage() {
                                                     {new Date(loan.created_at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
                                                 </span>
                                             </div>
-                                            <div className="flex items-center gap-4">
+                                            <div className="flex items-center justify-between w-full md:w-auto gap-4">
                                                 <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${loan.status === 'approved' ? 'bg-green-100 text-green-700' :
                                                     loan.status === 'rejected' ? 'bg-red-100 text-red-700' :
                                                         'bg-yellow-100 text-yellow-700'

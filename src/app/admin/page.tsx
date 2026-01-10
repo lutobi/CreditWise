@@ -44,6 +44,7 @@ type VerificationRequest = {
     employment_type?: string // Added field
     profiles: {
         full_name: string
+        national_id: string
     }
 }
 
@@ -107,7 +108,7 @@ export default function AdminPage() {
             // Fetch pending verifications
             const { data: verifData } = await supabase
                 .from('verifications')
-                .select('*, profiles(full_name)')
+                .select('*, profiles(full_name, national_id)')
                 .eq('is_employed', false)
                 .not('employer_name', 'is', null)
 
@@ -121,8 +122,33 @@ export default function AdminPage() {
     }
 
     const handleLoanAction = async (id: string, status: 'approved' | 'rejected') => {
-        await supabase.from('loans').update({ status }).eq('id', id)
-        fetchAdminData() // Refresh
+        let reason = '';
+        if (status === 'rejected') {
+            const input = prompt("Enter Rejection Reason:", "Did not meet affordability criteria");
+            if (input === null) return;
+            reason = input;
+        }
+
+        if (!window.confirm(`Are you sure you want to ${status.toUpperCase()} this loan? This will notify the user.`)) return;
+
+        try {
+            const res = await fetch('/api/admin/status-update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ loanId: id, status, reason })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                alert(`Loan ${status} successfully and email sent.`);
+                fetchAdminData();
+            } else {
+                alert('Error: ' + data.error);
+            }
+        } catch (e: any) {
+            console.error(e);
+            alert('Request failed: ' + e.message);
+        }
     }
 
     const handleViewDocument = async (url?: string) => {
@@ -148,7 +174,7 @@ export default function AdminPage() {
         }
     }
 
-    const handleVerifyUser = async (userId: string, income: number, employmentType: string) => {
+    const handleVerifyUser = async (userId: string, income: number, employmentType: string, nationalId?: string) => {
         try {
             // 1. Calculate Score via API
             const response = await fetch('/api/verify', {
@@ -159,15 +185,14 @@ export default function AdminPage() {
                 },
                 body: JSON.stringify({
                     income: income.toString(),
-                    employmentType: employmentType // Assuming this comes from the record? Wait, `verifications` table has employer_name, monthly_income but maybe not 'employment_type'?
-                    // Let's check the type definition at the top of the file
+                    employmentType: employmentType
                 })
             })
 
             const result = await response.json();
 
             if (result.success) {
-                // 2. Update Supabase with the calculated score
+                // 2. Update Supabase
                 await supabase.from('verifications').update({
                     is_employed: true,
                     credit_score: result.data.score
@@ -175,7 +200,13 @@ export default function AdminPage() {
 
                 // Refresh Data
                 fetchAdminData()
-                alert(`User Verified! System Calculated Score: ${result.data.score}`)
+
+                // 3. Show Full Report immediately if we have ID
+                if (nationalId) {
+                    await handleCreditCheck(nationalId); // Re-use logic to fetch & show modal
+                } else {
+                    alert(`User Verified! Score: ${result.data.score}`);
+                }
             } else {
                 alert('Verification Failed')
             }
@@ -378,8 +409,8 @@ export default function AdminPage() {
                                             <p>Income: N$ {verif.monthly_income}</p>
                                         </div>
                                         <div className="flex gap-2 items-center">
-                                            <Button size="sm" onClick={() => handleVerifyUser(verif.user_id, verif.monthly_income, verif.employment_type || 'Unknown')}>
-                                                Verify & Calculate Score
+                                            <Button size="sm" onClick={() => handleVerifyUser(verif.user_id, verif.monthly_income, verif.employment_type || 'Unknown', verif.profiles?.national_id)}>
+                                                Verify & View Report
                                             </Button>
                                         </div>
                                     </CardContent>
