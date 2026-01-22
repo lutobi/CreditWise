@@ -1,224 +1,65 @@
-[dotenv@17.2.3] injecting env (3) from .env.local -- tip: ✅ audit secrets and track compliance: https://dotenvx.com/ops
+[dotenv@17.2.3] injecting env (7) from .env.local -- tip: ⚙️  enable debug logging with { debug: true }
 
-Running 1 test using 1 worker
+Running 2 tests using 2 workers
 
 [1A[2K[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ✅ audit secrets and track compliance: https://dotenvx.com/ops
 
-[1A[2K[1/1] [chromium] › tests/e2e/user-application-flow.spec.ts:11:9 › User Application Flow › Full Application Flow
-[1A[2K[chromium] › tests/e2e/user-application-flow.spec.ts:11:9 › User Application Flow › Full Application Flow
-User created: testuser.1767617572028@example.com
+[1A[2K[1/2] [chromium] › tests/e2e/admin-verification.spec.ts:171:9 › Admin Verification Flow › Admin shows persistent results for pre-verified users
+[1A[2K[dotenv@17.2.3] injecting env (0) from .env.local -- tip: ⚙️  override existing env vars with { override: true }
 
-[1A[2KBROWSER LOG: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+[1A[2K[2/2] [chromium] › tests/e2e/admin-verification.spec.ts:11:9 › Admin Verification Flow › Admin can view verification queue and load selfie image
+[1A[2K  1) [chromium] › tests/e2e/admin-verification.spec.ts:171:9 › Admin Verification Flow › Admin shows persistent results for pre-verified users 
 
-[1A[2KBROWSER LOG: [HMR] connected
+    [31mTest timeout of 30000ms exceeded.[39m
 
-[1A[2KBROWSER LOG: [Fast Refresh] rebuilding
-
-[1A[2KBROWSER LOG: [Fast Refresh] done in 306ms
-
-[1A[2KBROWSER LOG: [Fast Refresh] rebuilding
-
-[1A[2KBROWSER LOG: [Fast Refresh] done in 1396ms
-
-[1A[2KBROWSER LOG: [Fast Refresh] rebuilding
-
-[1A[2KBROWSER LOG: [Fast Refresh] done in 709ms
-
-[1A[2KLogin successful. On dashboard.
-
-[1A[2KBROWSER LOG: Error fetching verification: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch
-    at http://localhost…ayground_nomad-pinwheel_src_602d7ed1._.js:989:60), hint: , code: }
-
-[1A[2KBROWSER LOG: Error fetching loans: {message: TypeError: Failed to fetch, details: TypeError: Failed to fetch
-    at http://localhost…yground_nomad-pinwheel_src_602d7ed1._.js:1004:59), hint: , code: }
-
-[1A[2KBROWSER LOG: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
-
-[1A[2KBROWSER LOG: [HMR] connected
-
-[1A[2KBROWSER LOG: [Fast Refresh] rebuilding
-
-[1A[2KCurrent URL: http://localhost:3000/apply
-
-[1A[2KBROWSER LOG: [Fast Refresh] done in 1445ms
-
-[1A[2KBROWSER LOG: Validation FAILED: ZodError: [
-  {
-    "origin": "string",
-    "code": "too_small",
-    "minimum": 2,
-    "inclusive": true,
-    "path": [
-      "employerName"
-    ],
-    "message": "Employer name is required"
-  },
-  {
-    "origin": "string",
-    "code": "too_small",
-    "minimum": 2,
-    "inclusive": true,
-    "path": [
-      "jobTitle"
-    ],
-    "message": "Job title is required"
-  },
-  {
-    "origin": "string",
-    "code": "too_small",
-    "minimum": 5,
-    "inclusive": true,
-    "path": [
-      "employerPhone"
-    ],
-    "message": "Employer contact number is required"
-  },
-  {
-    "origin": "string",
-    "code": "too_small",
-    "minimum": 1,
-    "inclusive": true,
-    "path": [
-      "employmentStartDate"
-    ],
-    "message": "Start date is required"
-  },
-  {
-    "origin": "string",
-    "code": "too_small",
-    "minimum": 2,
-    "inclusive": true,
-    "path": [
-      "hrName"
-    ],
-    "message": "HR Representative name is required"
-  },
-  {
-    "origin": "string",
-    "code": "invalid_format",
-    "format": "email",
-    "pattern": "/^(?!\\.)(?!.*\\.\\.)([A-Za-z0-9_'+\\-\\.]*)[A-Za-z0-9_+-]@([A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$/",
-    "path": [
-      "hrEmail"
-    ],
-    "message": "Valid HR email is required"
-  },
-  {
-    "origin": "string",
-    "code": "too_small",
-    "minimum": 5,
-    "inclusive": true,
-    "path": [
-      "hrPhone"
-    ],
-    "message": "HR contact number is required"
-  },
-  {
-    "code": "custom",
-    "path": [
-      "monthlyIncome"
-    ],
-    "message": "Valid income is required"
-  }
-]
-    at validateStep (http://localhost:3000/_next/static/chunks/_gemini_antigravity_playground_nomad-pinwheel_src_e07f4652._.js:1527:234)
-    at handleNext (http://localhost:3000/_next/static/chunks/_gemini_antigravity_playground_nomad-pinwheel_src_e07f4652._.js:1575:14)
-    at onSubmit (http://localhost:3000/_next/static/chunks/_gemini_antigravity_playground_nomad-pinwheel_src_e07f4652._.js:1669:25)
-    at executeDispatch (http://localhost:3000/_next/static/chunks/2bfa4_next_dist_compiled_react-dom_381dc2aa._.js:10314:13)
-    at runWithFiberInDEV (http://localhost:3000/_next/static/chunks/2bfa4_next_dist_compiled_react-dom_381dc2aa._.js:965:74)
-    at processDispatchQueue (http://localhost:3000/_next/static/chunks/2bfa4_next_dist_compiled_react-dom_381dc2aa._.js:10340:41)
-    at http://localhost:3000/_next/static/chunks/2bfa4_next_dist_compiled_react-dom_381dc2aa._.js:10615:13
-    at batchedUpdates$1 (http://localhost:3000/_next/static/chunks/2bfa4_next_dist_compiled_react-dom_381dc2aa._.js:2253:44)
-    at dispatchEventForPluginEventSystem (http://localhost:3000/_next/static/chunks/2bfa4_next_dist_compiled_react-dom_381dc2aa._.js:10416:9)
-    at dispatchEvent (http://localhost:3000/_next/static/chunks/2bfa4_next_dist_compiled_react-dom_381dc2aa._.js:12935:37)
-    at dispatchDiscreteEvent (http://localhost:3000/_next/static/chunks/2bfa4_next_dist_compiled_react-dom_381dc2aa._.js:12917:64)
-
-[1A[2KBROWSER LOG: Validation Errors: undefined
-
-[1A[2KBROWSER LOG: FormData: {
-  "firstName": "John",
-  "lastName": "Doe",
-  "nationalId": "90090900112",
-  "dob": "1990-09-09",
-  "gender": "Male",
-  "nationality": "Namibian",
-  "maritalStatus": "Single",
-  "address": "Windhoek",
-  "phone": "0811234567",
-  "altPhone": "0811234567",
-  "email": "testuser.1767617572028@example.com",
-  "employerName": "",
-  "jobTitle": "",
-  "employerPhone": "",
-  "employmentStartDate": "",
-  "employmentType": "Permanent",
-  "hrName": "",
-  "hrEmail": "",
-  "hrPhone": "",
-  "monthlyIncome": "",
-  "bankName": "",
-  "accountHolder": "",
-  "accountNumber": "",
-  "accountType": "Savings",
-  "branchCode": "",
-  "loanType": "term",
-  "loanAmount": 5000,
-  "repaymentPeriod": 6,
-  "loanPurpose": "",
-  "repaymentMethod": "Debit Order",
-  "nextOfKinName": "",
-  "nextOfKinRelationship": "",
-  "nextOfKinContact": "",
-  "nextOfKinAddress": "",
-  "idDocument": "",
-  "payslip": "",
-  "selfie": "",
-  "confirmTruth": false,
-  "understandLegal": false,
-  "consentAffordability": false,
-  "consentVerification": false,
-  "readTerms": false,
-  "acknowledgeRight": false,
-  "signatureName": "",
-  "declarationDate": "2026-01-05"
-}
-
-[1A[2KStep 2...
-
-[1A[2K  1) [chromium] › tests/e2e/user-application-flow.spec.ts:11:9 › User Application Flow › Full Application Flow 
-
-    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
-
-    Locator: locator('text=Employment')
-    Expected: visible
-    Error: strict mode violation: locator('text=Employment') resolved to 2 elements:
-        1) <h3 class="tracking-tight text-2xl font-bold">Employment & Income</h3> aka getByRole('heading', { name: 'Employment & Income' })
-        2) <label class="text-sm font-medium">Employment Type</label> aka getByText('Employment Type')
-
+    Error: page.goto: Test timeout of 30000ms exceeded.
     Call log:
-    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
-    [2m  - waiting for locator('text=Employment')[22m
+    [2m  - navigating to "http://localhost:3000/login", waiting until "load"[22m
 
 
-      61 |             // Step 2
-      62 |             console.log('Step 2...');
-    > 63 |             await expect(page.locator('text=Employment')).toBeVisible();
-         |                                                           ^
-      64 |
-      65 |             const empNameInput = page.locator('input[name="employerName"]');
-      66 |             await empNameInput.fill('Test Corp', { force: true });
-        at /Users/olutobi/.gemini/antigravity/playground/nomad-pinwheel/tests/e2e/user-application-flow.spec.ts:63:59
+      207 |
+      208 |         // Login Mock
+    > 209 |         await page.goto('/login');
+          |                    ^
+      210 |         await page.evaluate(() => {
+      211 |             const session = {
+      212 |                 access_token: 'fake_token',
+        at /Users/olutobi/.gemini/antigravity/playground/nomad-pinwheel/tests/e2e/admin-verification.spec.ts:209:20
 
-    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
-    test-results/user-application-flow-User-7f914--Flow-Full-Application-Flow-chromium/test-failed-1.png
+    attachment #1: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/admin-verification-Admin-V-c7e1f-ults-for-pre-verified-users-chromium/video.webm
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
-    test-results/user-application-flow-User-7f914--Flow-Full-Application-Flow-chromium/video.webm
+    Error Context: test-results/admin-verification-Admin-V-c7e1f-ults-for-pre-verified-users-chromium/error-context.md
+
+
+[1A[2K  2) [chromium] › tests/e2e/admin-verification.spec.ts:11:9 › Admin Verification Flow › Admin can view verification queue and load selfie image 
+
+    [31mTest timeout of 30000ms exceeded.[39m
+
+    Error: page.goto: Test timeout of 30000ms exceeded.
+    Call log:
+    [2m  - navigating to "http://localhost:3000/login", waiting until "load"[22m
+
+
+      92 |
+      93 |         // 3. Navigate (Inject Session First)
+    > 94 |         await page.goto('http://localhost:3000/login'); // Go to a page first to set storage
+         |                    ^
+      95 |         await page.evaluate(() => {
+      96 |             const fakeSession = {
+      97 |                 access_token: 'admin-token',
+        at /Users/olutobi/.gemini/antigravity/playground/nomad-pinwheel/tests/e2e/admin-verification.spec.ts:94:20
+
+    attachment #1: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/admin-verification-Admin-V-3f32e-queue-and-load-selfie-image-chromium/video.webm
     ────────────────────────────────────────────────────────────────────────────────────────────────
 
-    Error Context: test-results/user-application-flow-User-7f914--Flow-Full-Application-Flow-chromium/error-context.md
+    Error Context: test-results/admin-verification-Admin-V-3f32e-queue-and-load-selfie-image-chromium/error-context.md
 
 
-[1A[2K  1 failed
-    [chromium] › tests/e2e/user-application-flow.spec.ts:11:9 › User Application Flow › Full Application Flow 
+[1A[2K  2 failed
+    [chromium] › tests/e2e/admin-verification.spec.ts:11:9 › Admin Verification Flow › Admin can view verification queue and load selfie image 
+    [chromium] › tests/e2e/admin-verification.spec.ts:171:9 › Admin Verification Flow › Admin shows persistent results for pre-verified users 
+
+[36m  Serving HTML report at http://localhost:57728. Press Ctrl+C to quit.[39m

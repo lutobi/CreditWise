@@ -1,0 +1,60 @@
+[dotenv@17.2.3] injecting env (7) from .env.local -- tip: ⚙️  specify custom .env file path with { path: '/custom/path/.env' }
+
+Running 1 test using 1 worker
+
+[1A[2K[dotenv@17.2.3] injecting env (0) from .env.local -- tip: 🔐 encrypt with Dotenvx: https://dotenvx.com
+
+[1A[2K[1/1] [chromium] › tests/e2e/retake-flow.spec.ts:10:9 › Premium Retake Flow › User Dashboard: Focus -> Submit -> Collapse Flow
+[1A[2K[chromium] › tests/e2e/retake-flow.spec.ts:10:9 › Premium Retake Flow › User Dashboard: Focus -> Submit -> Collapse Flow
+BROWSER: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+
+[1A[2KBROWSER: [HMR] connected
+
+[1A[2KBROWSER: [Fast Refresh] rebuilding
+
+[1A[2KBROWSER: [Fast Refresh] done in 168ms
+
+[1A[2KBROWSER: %cDownload the React DevTools for a better development experience: https://react.dev/link/react-devtools font-weight:bold
+
+[1A[2KBROWSER: [HMR] connected
+
+[1A[2KBROWSER: Failed to load resource: the server responded with a status of 400 ()
+
+[1A[2K  1) [chromium] › tests/e2e/retake-flow.spec.ts:10:9 › Premium Retake Flow › User Dashboard: Focus -> Submit -> Collapse Flow 
+
+    Error: [2mexpect([22m[31mlocator[39m[2m).[22mtoBeVisible[2m([22m[2m)[22m failed
+
+    Locator: locator('text=Action Required: Update Selfie')
+    Expected: visible
+    Timeout: 5000ms
+    Error: element(s) not found
+
+    Call log:
+    [2m  - Expect "toBeVisible" with timeout 5000ms[22m
+    [2m  - waiting for locator('text=Action Required: Update Selfie')[22m
+
+
+      74 |
+      75 |         // 6. Verify Retake Banner
+    > 76 |         await expect(page.locator('text=Action Required: Update Selfie')).toBeVisible();
+         |                                                                           ^
+      77 |
+      78 |         // 7. Simulate Live Selfie Capture & Submit
+      79 |         await expect(page.locator('text=Active Liveness Check Required')).toBeVisible();
+        at /Users/olutobi/.gemini/antigravity/playground/nomad-pinwheel/tests/e2e/retake-flow.spec.ts:76:75
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/retake-flow-Premium-Retake-0782b-us---Submit---Collapse-Flow-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    attachment #2: video (video/webm) ──────────────────────────────────────────────────────────────
+    test-results/retake-flow-Premium-Retake-0782b-us---Submit---Collapse-Flow-chromium/video.webm
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/retake-flow-Premium-Retake-0782b-us---Submit---Collapse-Flow-chromium/error-context.md
+
+
+[1A[2K  1 failed
+    [chromium] › tests/e2e/retake-flow.spec.ts:10:9 › Premium Retake Flow › User Dashboard: Focus -> Submit -> Collapse Flow 
+
+[36m  Serving HTML report at http://localhost:59085. Press Ctrl+C to quit.[39m

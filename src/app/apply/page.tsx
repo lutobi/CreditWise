@@ -69,9 +69,9 @@ export default function ApplyPage() {
         branchCode: "",
 
         // 4. Loan Details
-        loanType: "term" as "term" | "payday",
+        loanType: "payday" as "term" | "payday",
         loanAmount: 5000,
-        repaymentPeriod: 6,
+        repaymentPeriod: 1,
         loanPurpose: "",
         repaymentMethod: "Debit Order" as "Debit Order" | "EFT" | "Cash Deposit",
 
@@ -107,7 +107,9 @@ export default function ApplyPage() {
         }
     }, [user, authLoading, router])
 
-    // Check for existing loans
+    // Load draft from LocalStorage on mount (if no existing loan found)
+    const [hasActiveLoanError, setHasActiveLoanError] = React.useState(false);
+
     React.useEffect(() => {
         const checkExistingLoan = async () => {
             if (!user) return
@@ -121,38 +123,71 @@ export default function ApplyPage() {
 
             if (loans && loans.length > 0) {
                 const latestLoan = loans[0]
-                if (latestLoan.status === 'active' || latestLoan.status === 'approved') {
-                    toast.error("You already have an active loan. Please repay it before applying for a new one.")
-                    router.push('/dashboard')
+
+                // Calculate if loan is fully paid
+                const INTEREST_RATE = 0.25;
+                const totalRepayment = latestLoan.amount * (1 + INTEREST_RATE * latestLoan.duration_months);
+                const amountPaid = latestLoan.amount_paid || 0;
+                const isFullyPaid = amountPaid >= totalRepayment;
+
+                // Allow re-application if loan is fully paid OR rejected OR completed
+                if ((latestLoan.status === 'active' || latestLoan.status === 'approved') && !isFullyPaid) {
+                    // Show graceful inline error instead of redirecting
+                    setHasActiveLoanError(true);
+                    return;
                 } else if (latestLoan.status === 'pending') {
                     console.log('✅ Found pending loan:', latestLoan.id)
                     toast.info("Resuming your pending application.")
                     setExistingLoanId(latestLoan.id)
 
-                    // Helper to safely parse JSON
                     const parseData = (data: any) => {
                         return typeof data === 'string' ? JSON.parse(data) : data || {}
                     }
-
-                    // Pre-fill form from application_data if available, else basic map
                     const appData = parseData(latestLoan.application_data)
 
                     setFormData(prev => ({
                         ...prev,
-                        ...appData, // Spread full saved data
-                        loanAmount: latestLoan.amount, // Ensure core fields sync
+                        ...appData,
+                        loanAmount: latestLoan.amount,
                         repaymentPeriod: latestLoan.duration_months,
                     }))
+                }
+                // If fully paid, rejected, or completed, allow new application
+            } else {
+                // No existing loan, check for local draft
+                const savedDraft = localStorage.getItem('nomad_loan_draft');
+                if (savedDraft) {
+                    try {
+                        const parsedDraft = JSON.parse(savedDraft);
+                        // Merge draft with default state to ensure structure integrity
+                        setFormData(prev => ({ ...prev, ...parsedDraft }));
+                        console.log('📝 Restored draft from local storage');
+                    } catch (e) {
+                        console.error('Failed to parse draft', e);
+                    }
                 }
             }
         }
         checkExistingLoan()
-    }, [user, router])
+    }, [user?.id, router])
+
+    // Auto-Save to LocalStorage
+    React.useEffect(() => {
+        if (formData) {
+            const timeoutId = setTimeout(() => {
+                localStorage.setItem('nomad_loan_draft', JSON.stringify(formData));
+            }, 1000); // Debounce save by 1s
+            return () => clearTimeout(timeoutId);
+        }
+    }, [formData]);
 
     const updateField = (field: string | React.ChangeEvent<HTMLInputElement | HTMLSelectElement>, value?: any) => {
         if (typeof field === 'object' && field !== null && 'target' in field) {
-            const { name, value } = field.target
-            setFormData(prev => ({ ...prev, [name]: value }))
+            const target = field.target as HTMLInputElement
+            const name = target.name
+            const val = target.type === 'checkbox' ? target.checked : target.value
+
+            setFormData(prev => ({ ...prev, [name]: val }))
             if (errors[name]) {
                 setErrors(prev => {
                     const newErrors = { ...prev }
@@ -357,6 +392,10 @@ export default function ApplyPage() {
             // Ensure loanAmount is a number
             const amount = typeof formData.loanAmount === 'string' ? parseFloat(formData.loanAmount) : formData.loanAmount;
 
+            // Generate Reference ID
+            const refId = `OMR-${Math.floor(100000 + Math.random() * 900000)}`;
+            const submissionData = { ...formData, refId };
+
             const { data: loan, error: loanError } = await supabase.from('loans').insert({
                 user_id: user.id,
                 amount: amount,
@@ -365,7 +404,7 @@ export default function ApplyPage() {
                 interest_rate: 5, // Default interest rate to satisfy constraint if any
                 purpose: formData.loanPurpose,
                 status: 'pending',
-                application_data: formData // JSONB column
+                application_data: submissionData // JSONB column
             }).select().single()
 
             if (loanError) throw loanError;
@@ -426,6 +465,52 @@ export default function ApplyPage() {
         )
     }
 
+    // Show active loan error banner
+    if (hasActiveLoanError) {
+        return (
+            <div className="container max-w-3xl mx-auto py-8 px-4">
+                <Card className="border-amber-300 bg-amber-50/50 dark:bg-amber-950/20">
+                    <CardHeader className="pb-2">
+                        <div className="flex items-center gap-3">
+                            <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
+                                <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                                </svg>
+                            </div>
+                            <div>
+                                <CardTitle className="text-lg text-amber-800 dark:text-amber-200">Active Loan in Progress</CardTitle>
+                            </div>
+                        </div>
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                        <p className="text-amber-700 dark:text-amber-300">
+                            You currently have an active loan that hasn't been fully repaid. To apply for a new loan, please complete your current loan repayment first.
+                        </p>
+                        <div className="flex flex-col sm:flex-row gap-3">
+                            <Button
+                                onClick={() => router.push('/dashboard')}
+                                className="bg-amber-600 hover:bg-amber-700 text-white"
+                            >
+                                <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                </svg>
+                                View My Loan
+                            </Button>
+                            <Button
+                                variant="outline"
+                                onClick={() => router.push('/')}
+                                className="border-amber-400 text-amber-700 hover:bg-amber-100 dark:text-amber-300 dark:hover:bg-amber-900/30"
+                            >
+                                Back to Home
+                            </Button>
+                        </div>
+                    </CardContent>
+                </Card>
+            </div>
+        );
+    }
+
     return (
         <div className="container max-w-3xl mx-auto py-8 px-4">
             <div className="mb-8">
@@ -448,18 +533,18 @@ export default function ApplyPage() {
                     {/* Step 1: Personal */}
                     {step === 1 && (
                         <div className="grid gap-4 md:grid-cols-2">
-                            <FormInput label="First Name" name="firstName" placeholder="e.g. John" value={formData.firstName} onChange={updateField} error={errors.firstName} />
-                            <FormInput label="Last Name" name="lastName" placeholder="e.g. Doe" value={formData.lastName} onChange={updateField} error={errors.lastName} />
+                            <FormInput label="First Name" name="firstName" placeholder="e.g. John" value={formData.firstName} onChange={updateField} error={errors.firstName} autoComplete="given-name" />
+                            <FormInput label="Last Name" name="lastName" placeholder="e.g. Doe" value={formData.lastName} onChange={updateField} error={errors.lastName} autoComplete="family-name" />
                             <FormInput label="ID Number" name="nationalId" placeholder="e.g. 90010100123" value={formData.nationalId} onChange={updateField} error={errors.nationalId} />
-                            <FormInput label="Date of Birth" type="date" name="dob" value={formData.dob} onChange={updateField} error={errors.dob} />
+                            <FormInput label="Date of Birth" type="date" name="dob" value={formData.dob} onChange={updateField} error={errors.dob} autoComplete="bday" />
                             <FormSelect label="Gender" name="gender" options={["Male", "Female", "Other"]} value={formData.gender} onChange={updateField} />
-                            <FormInput label="Nationality" name="nationality" placeholder="e.g. Namibian" value={formData.nationality} onChange={updateField} error={errors.nationality} />
+                            <FormInput label="Nationality" name="nationality" placeholder="e.g. Namibian" value={formData.nationality} onChange={updateField} error={errors.nationality} autoComplete="country-name" />
                             <FormSelect label="Marital Status" name="maritalStatus" options={["Single", "Married", "Divorced", "Widowed", "Separated"]} value={formData.maritalStatus} onChange={updateField} />
-                            <FormInput label="Mobile Number" name="phone" placeholder="e.g. 081 123 4567" value={formData.phone} onChange={updateField} error={errors.phone} />
-                            <FormInput label="Alt Contact" name="altPhone" placeholder="e.g. 081 234 5678" value={formData.altPhone} onChange={updateField} error={errors.altPhone} />
-                            <FormInput label="Email" name="email" type="email" placeholder="john@example.com" value={formData.email} onChange={updateField} error={errors.email} />
+                            <FormInput label="Mobile Number" name="phone" placeholder="e.g. 081 123 4567" value={formData.phone} onChange={updateField} error={errors.phone} autoComplete="tel" />
+                            <FormInput label="Alt Contact" name="altPhone" placeholder="e.g. 081 234 5678" value={formData.altPhone} onChange={updateField} error={errors.altPhone} autoComplete="tel" />
+                            <FormInput label="Email" name="email" type="email" placeholder="john@example.com" value={formData.email} onChange={updateField} error={errors.email} autoComplete="email" />
                             <div className="col-span-2">
-                                <FormInput label="Residential Address" name="address" placeholder="Erf 123, Street Name, Windhoek" value={formData.address} onChange={updateField} error={errors.address} />
+                                <FormInput label="Residential Address" name="address" placeholder="Erf 123, Street Name, Windhoek" value={formData.address} onChange={updateField} error={errors.address} autoComplete="street-address" />
                             </div>
                         </div>
                     )}
@@ -467,9 +552,9 @@ export default function ApplyPage() {
                     {/* Step 2: Employment */}
                     {step === 2 && (
                         <div className="grid gap-4 md:grid-cols-2">
-                            <FormInput label="Employer Name" name="employerName" placeholder="e.g. Government of Namibia" value={formData.employerName} onChange={updateField} error={errors.employerName} />
-                            <FormInput label="Job Title" name="jobTitle" placeholder="e.g. Teacher" value={formData.jobTitle} onChange={updateField} error={errors.jobTitle} />
-                            <FormInput label="Employer Contact" name="employerPhone" placeholder="e.g. 061 123 456 or 081..." value={formData.employerPhone} onChange={updateField} error={errors.employerPhone} />
+                            <FormInput label="Employer Name" name="employerName" placeholder="e.g. Government of Namibia" value={formData.employerName} onChange={updateField} error={errors.employerName} autoComplete="organization" />
+                            <FormInput label="Job Title" name="jobTitle" placeholder="e.g. Teacher" value={formData.jobTitle} onChange={updateField} error={errors.jobTitle} autoComplete="organization-title" />
+                            <FormInput label="Employer Contact" name="employerPhone" placeholder="e.g. 061 123 456 or 081..." value={formData.employerPhone} onChange={updateField} error={errors.employerPhone} autoComplete="tel-work" />
                             <FormInput label="Start Date" type="date" name="employmentStartDate" value={formData.employmentStartDate} onChange={updateField} error={errors.employmentStartDate} />
                             <FormSelect label="Employment Type" name="employmentType" options={["Permanent", "Contract", "Temporary", "Government"]} value={formData.employmentType} onChange={updateField} />
                             <FormInput label="Monthly Income (N$)" type="number" name="monthlyIncome" placeholder="e.g. 15000" value={formData.monthlyIncome} onChange={updateField} error={errors.monthlyIncome} />
@@ -512,21 +597,21 @@ export default function ApplyPage() {
                     <option value="payday">Payday Loan (1 Month)</option>
                     <option value="term">Term Loan (3-36 Months)</option>
                 </select> */}
-                                    <div className="flex h-10 w-full items-center rounded-md border border-zinc-700 bg-zinc-800 px-3 text-sm text-zinc-400 cursor-not-allowed">
+                                    <div className="flex h-11 w-full items-center rounded-md border border-slate-300 bg-slate-100 px-3 text-sm text-slate-500 cursor-not-allowed">
                                         Payday Loan (1 Month)
                                     </div>
                                 </div>
 
 
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">Loan Amount: {formatCurrency(formData.loanAmount)}</label>
-                                    <input type="range" min="1000" max="50000" step="1000" className="w-full h-2 bg-muted rounded-lg appearance-none cursor-pointer accent-primary" value={formData.loanAmount} onChange={(e) => updateField('loanAmount', parseInt(e.target.value))} />
+                                    <label className="text-sm font-semibold leading-none text-slate-900">Loan Amount: {formatCurrency(formData.loanAmount)}</label>
+                                    <input type="range" name="loanAmount" min="1000" max="50000" step="1000" className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary" value={formData.loanAmount} onChange={(e) => updateField('loanAmount', parseInt(e.target.value))} />
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">Period: 1 Month</label>
+                                    <label className="text-sm font-semibold leading-none text-slate-900">Period: 1 Month</label>
                                     <div className="flex gap-2">
-                                        <Button type="button" variant="default" className="w-full md:w-auto" disabled>1 Month (Fixed)</Button>
+                                        <Button type="button" variant="outline" className="w-full md:w-auto border-slate-300 text-slate-500 bg-slate-50" disabled>1 Month (Fixed)</Button>
                                     </div>
                                 </div>
 
@@ -636,10 +721,10 @@ export default function ApplyPage() {
                                         <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
                                             <Scale className="h-4 w-4 text-primary" />
                                         </div>
-                                        <h3 className="text-lg font-semibold text-zinc-900 dark:text-zinc-50">Legal Declaration & Consent</h3>
+                                        <h3 className="text-lg font-semibold text-slate-900">Legal Declaration & Consent</h3>
                                     </div>
 
-                                    <div className="h-48 overflow-y-auto pr-2 text-sm text-foreground/80 space-y-3 pretty-scrollbar font-leading-relaxed">
+                                    <div className="h-48 overflow-y-auto pr-2 text-sm text-slate-600 space-y-3 pretty-scrollbar font-leading-relaxed">
                                         <p><strong>1. Accuracy of Information:</strong> I confirm that all information provided in this application is true, complete, and accurate. I understand that providing false or misleading information is a serious offense and may result in the rejection of my application and potential legal action.</p>
                                         <p><strong>2. Credit Check Consent:</strong> I voluntarily consent to OMARI FINANCE conducting credit checks and affordability assessments as required by the Financial Institutions and Markets Act (FIMA) and NAMFISA regulations. This includes verifying my income, employment details, and credit history with registered credit bureaus.</p>
                                         <p><strong>3. Data Privacy:</strong> I authorize OMARI FINANCE to process my personal data in accordance with their Privacy Policy for the purpose of assessing this loan application.</p>
@@ -719,7 +804,7 @@ export default function ApplyPage() {
 }
 
 // Components
-const FormInput = ({ label, name, type = "text", value, onChange, error, placeholder = "", disabled = false }: {
+const FormInput = ({ label, name, type = "text", value, onChange, error, placeholder = "", disabled = false, autoComplete }: {
     label: string
     name: string
     type?: string
@@ -728,9 +813,10 @@ const FormInput = ({ label, name, type = "text", value, onChange, error, placeho
     error?: string
     placeholder?: string
     disabled?: boolean
+    autoComplete?: string
 }) => (
     <div className="space-y-2">
-        <label htmlFor={name} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-zinc-300">
+        <label htmlFor={name} className="text-sm font-semibold leading-none text-slate-900">
             {label}
         </label>
         <input
@@ -740,10 +826,11 @@ const FormInput = ({ label, name, type = "text", value, onChange, error, placeho
             value={value}
             onChange={onChange}
             disabled={disabled}
-            className="flex h-10 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-[#8B5CF6] focus:border-transparent disabled:cursor-not-allowed disabled:opacity-50 text-white"
+            autoComplete={autoComplete}
+            className="flex h-11 w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 shadow-sm"
             placeholder={placeholder}
         />
-        {error && <p className="text-xs text-red-500">{error}</p>}
+        {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
     </div>
 )
 
@@ -757,33 +844,61 @@ const FormSelect = ({ label, name, value, onChange, options, error, disabled = f
     disabled?: boolean
 }) => (
     <div className="space-y-2">
-        <label htmlFor={name} className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 text-zinc-300">
+        <label htmlFor={name} className="text-sm font-semibold leading-none text-slate-900">
             {label}
         </label>
-        <select
-            id={name}
-            name={name}
-            value={value}
-            onChange={onChange}
-            disabled={disabled}
-            className="flex h-10 w-full rounded-md border border-zinc-700 bg-zinc-800 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#8B5CF6] focus:border-transparent disabled:cursor-not-allowed disabled:opacity-50 text-white"
-        >
-            {options.map((opt) => (
-                <option key={opt} value={opt}>
-                    {opt}
-                </option>
-            ))}
-        </select>
-        {error && <p className="text-xs text-red-500">{error}</p>}
+        <div className="relative">
+            <select
+                id={name}
+                name={name}
+                value={value}
+                onChange={onChange}
+                disabled={disabled}
+                className="flex h-11 w-full appearance-none rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 shadow-sm"
+            >
+                {options.map((opt) => (
+                    <option key={opt} value={opt}>
+                        {opt}
+                    </option>
+                ))}
+            </select>
+            <ChevronRight className="absolute right-3 top-3 h-4 w-4 rotate-90 text-slate-400 pointer-events-none" />
+        </div>
+        {error && <p className="text-xs text-red-600 font-medium">{error}</p>}
     </div>
 )
 
 const Checkbox = ({ label, name, checked, onChange, error }: any) => (
-    <div className="flex items-start gap-2">
-        <input type="checkbox" className="mt-1 h-4 w-4 bg-primary" checked={checked} onChange={(e) => onChange(name, e.target.checked)} />
+    <div className="flex items-start gap-3 p-2 rounded-md hover:bg-slate-50 transition-colors">
+        <input
+            type="checkbox"
+            className="mt-1 h-5 w-5 rounded border-slate-300 text-primary focus:ring-primary"
+            checked={checked}
+            onChange={(e) => {
+                // Return a structure that mimics a standard event so updateField can consume it generically
+                // property 'target' with 'name', 'type', 'checked'
+                onChange({
+                    target: {
+                        name: name,
+                        type: 'checkbox',
+                        checked: e.target.checked,
+                        value: e.target.checked ? 'on' : 'off'
+                    }
+                } as any)
+            }}
+        />
         <div>
-            <label className="text-sm leading-none text-foreground">{label}</label>
-            {error && <p className="text-xs text-red-500">{error}</p>}
+            <label className="text-sm leading-relaxed text-slate-700 font-medium cursor-pointer" onClick={() => {
+                onChange({
+                    target: {
+                        name: name,
+                        type: 'checkbox',
+                        checked: !checked,
+                        value: !checked ? 'on' : 'off'
+                    }
+                } as any)
+            }}>{label}</label>
+            {error && <p className="text-xs text-red-600 mt-1 font-medium">{error}</p>}
         </div>
     </div>
 )

@@ -85,7 +85,7 @@ export const loanDetailsSchema = z.object({
     loanType: z.enum(['payday', 'term']),
     loanAmount: z.number().min(1000).max(50000),
     repaymentPeriod: z.number().min(1).max(36),
-    loanPurpose: z.string().min(5, 'Please specify the purpose of the loan'),
+    loanPurpose: z.string().min(3, 'Please specify the purpose of the loan'),
     repaymentMethod: z.enum(['Debit Order', 'EFT', 'Cash Deposit']),
 })
 

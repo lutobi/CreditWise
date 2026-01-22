@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json();
-    const { income, employmentType } = body;
+    const { income, employmentType, loanId } = body; // Expect loanId
 
     // Deterministic Scoring Formula
     let score = 300; // Base Score
@@ -52,6 +52,59 @@ export async function POST(request: Request) {
     if (score > 1000) score = 1000;
 
     const isQualified = score >= 600;
+
+    // 3. FETCH LOAN to get correct User ID (Fixes Admin ID bug)
+    const { data: loan, error: loanError } = await supabase
+        .from('loans')
+        .select('user_id, application_data')
+        .eq('id', loanId)
+        .single();
+
+    if (loanError || !loan) {
+        return NextResponse.json({ success: false, error: 'Loan not found' }, { status: 404 });
+    }
+
+    // 4. PERSISTENCE
+    // Use Service Role to write to verification table
+    const supabaseAdmin = createClient(supabaseUrl, process.env.SUPABASE_SERVICE_ROLE_KEY!);
+
+    const { error: updateError } = await supabaseAdmin
+        .from('verifications')
+        .update({
+            is_employed: true, // Mark as Verified (Moves to Approval Queue)
+            credit_score: score,
+            updated_at: new Date().toISOString()
+        })
+        .eq('user_id', loan.user_id);
+
+    // 4.1 Update Loan Status to Clear Retake & Move to "Under Review" visually
+    if (loanId) {
+        const { error: loanUpdateErr } = await supabaseAdmin
+            .from('loans')
+            .update({
+                status: 'pending', // Ensure it's pending (or could be 'under_review' if supported)
+                application_data: {
+                    ...loan.application_data,
+                    status_detail: 'video_verified', // Clear 'retake_requested'
+                    requests: {} // Clear any pending requests
+                }
+            })
+            .eq('id', loanId);
+
+        if (loanUpdateErr) console.error("Failed to clear loan retake flags:", loanUpdateErr);
+    }
+
+    if (updateError) {
+        console.error("Verification Update Failed:", updateError);
+        return NextResponse.json({ success: false, error: "Failed to update database" }, { status: 500 });
+    }
+
+    // 4. AUDIT LOG
+    if (loanId) {
+        // Dynamic import to avoid circular dep issues if any? No.
+        const { logAudit } = await import('@/lib/audit');
+        await logAudit(loanId, 'VERIFICATION_PASSED', { score, isQualified, income, type }, user.id);
+    }
 
     return NextResponse.json({
         success: true,

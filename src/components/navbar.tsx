@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { Menu, X, CreditCard, User, LogOut } from "lucide-react"
+import { Menu, X, CreditCard, User, LogOut, Search, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { cn } from "@/lib/utils"
 import { useAuth } from "@/components/auth-provider"
@@ -35,6 +35,24 @@ export function Navbar() {
 
                         {user ? (
                             <>
+                                {['admin', 'admin_verifier', 'admin_approver'].includes(user.app_metadata?.role || '') && (
+                                    <>
+                                        <Link href="/admin" className="text-sm font-medium text-purple-600 hover:text-purple-800 transition-colors">
+                                            Admin Portal
+                                        </Link>
+                                        <Link href="/admin/reports" className="text-sm font-medium text-slate-600 hover:text-slate-800 transition-colors">
+                                            Reports
+                                        </Link>
+                                        <Link href="/admin/search" className="text-slate-400 hover:text-slate-600 transition-colors p-1">
+                                            <Search className="w-4 h-4" />
+                                        </Link>
+                                        {user.app_metadata?.role === 'admin' && (
+                                            <Link href="/admin/settings" className="text-slate-400 hover:text-slate-600 transition-colors p-1">
+                                                <Settings className="w-4 h-4" />
+                                            </Link>
+                                        )}
+                                    </>
+                                )}
                                 <Link href="/dashboard" className="text-sm font-medium hover:text-primary transition-colors">
                                     Dashboard
                                 </Link>
@@ -43,6 +61,12 @@ export function Navbar() {
                                         <User className="h-4 w-4" />
                                         <span className="max-w-[100px] truncate">{user.user_metadata?.full_name || 'User'}</span>
                                     </div>
+                                    <Link href="/dashboard/profile">
+                                        <Button variant="ghost" size="sm">
+                                            <User className="h-4 w-4 mr-2" />
+                                            My Profile
+                                        </Button>
+                                    </Link>
                                     <Button variant="ghost" size="sm" onClick={() => signOut()}>
                                         <LogOut className="h-4 w-4 mr-2" />
                                         Sign Out
@@ -102,6 +126,13 @@ export function Navbar() {
                                     onClick={() => setIsOpen(false)}
                                 >
                                     Dashboard
+                                </Link>
+                                <Link
+                                    href="/dashboard/profile"
+                                    className="text-sm font-medium hover:text-primary"
+                                    onClick={() => setIsOpen(false)}
+                                >
+                                    My Profile
                                 </Link>
                                 <div className="pt-2 border-t">
                                     <div className="flex items-center gap-2 mb-4 text-sm font-medium text-muted-foreground">

@@ -95,9 +95,27 @@ export default function LoanDetailsPage() {
                             <div className="space-y-1">
                                 <div className="flex items-center gap-2 text-muted-foreground">
                                     <CreditCard className="h-4 w-4" />
-                                    <span className="text-sm">Monthly</span>
+                                    <span className="text-sm">Monthly Repayment</span>
                                 </div>
-                                <p className="font-medium">N$ {loan.monthly_payment}</p>
+                                <p className="font-medium text-purple-700">
+                                    N$ {((loan.amount * (1 + 0.25 * loan.duration_months)) / loan.duration_months).toFixed(2)}
+                                </p>
+                            </div>
+                        </div>
+
+                        {/* Additional Repayment Info */}
+                        <div className="grid grid-cols-2 gap-4 p-3 bg-purple-50 rounded-lg">
+                            <div className="space-y-1">
+                                <span className="text-xs text-muted-foreground">Total Repayment</span>
+                                <p className="font-bold text-purple-700">
+                                    N$ {(loan.amount * (1 + 0.25 * loan.duration_months)).toFixed(2)}
+                                </p>
+                            </div>
+                            <div className="space-y-1">
+                                <span className="text-xs text-muted-foreground">Interest (25%)</span>
+                                <p className="font-bold text-orange-600">
+                                    N$ {(loan.amount * 0.25 * loan.duration_months).toFixed(2)}
+                                </p>
                             </div>
                         </div>
 

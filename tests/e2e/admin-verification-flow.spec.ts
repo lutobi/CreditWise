@@ -42,6 +42,16 @@ test.describe('Admin Face Verification Flow', () => {
         });
         if (userError) throw userError;
 
+        // 1b. Create Profile Row (Essential because createUser doesn't trigger it if no DB trigger exists)
+        const { error: profileError } = await supabaseAdmin
+            .from('profiles')
+            .insert({
+                id: user.user.id,
+                full_name: 'Test Applicant',
+                updated_at: new Date().toISOString()
+            });
+        if (profileError) console.error('Warning: Failed to create profile row:', profileError);
+
         // Create Admin User
         const { data: admin, error: adminError } = await supabaseAdmin.auth.admin.createUser({
             email: adminEmail,
