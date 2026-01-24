@@ -14,6 +14,7 @@ type AuditAction =
     | 'PAYMENT_RECEIVED'
     | 'LOAN_PAID'
     | 'SYSTEM_ERROR'
+    | 'HR_VERIFICATION_EMAIL_SENT'
 
 export async function logAudit(loanId: string, action: AuditAction, details: any = {}, actorId?: string) {
     try {

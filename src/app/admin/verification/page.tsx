@@ -8,7 +8,7 @@ import { Footer } from "@/components/footer"
 import { useAuth } from "@/components/auth-provider"
 import { supabase } from "@/lib/supabase"
 import { useRouter } from "next/navigation"
-import { Check, X, Loader2, AlertCircle, Camera, UserCheck, RefreshCw } from "lucide-react"
+import { Check, X, Loader2, AlertCircle, Camera, UserCheck, RefreshCw, Maximize2, ZoomIn, ZoomOut } from "lucide-react"
 
 type VerificationItem = {
     loan_id: string
@@ -19,6 +19,7 @@ type VerificationItem = {
     created_at: string
     full_name: string
     national_id: string
+    phone: string // Added
     monthly_income: string | number
     employer_name: string
     employment_type: string
@@ -34,9 +35,21 @@ type VerificationItem = {
     documents: {
         id_url: string
         payslip_url: string
+        recent_payslip_url?: string // Added
         selfie_url?: string
         previous_selfie_url?: string // Added for diff view
     } | null
+    // HR & Kin
+    hr_name?: string
+    hr_email?: string
+    hr_phone?: string
+    hr_verification_requested?: boolean
+    hr_verification_requested_at?: string
+    kin_name?: string
+    kin_relationship?: string
+    kin_contact?: string
+    kin_address?: string
+    inspected?: boolean // Added for UI state
 }
 
 type AuditLog = {
@@ -57,8 +70,46 @@ export default function VerificationPage() {
     const [error, setError] = useState<string | null>(null)
     const [checkingFaceId, setCheckingFaceId] = useState<string | null>(null)
     const [verificationResults, setVerificationResults] = useState<Record<string, any>>({})
+    const [inspectingItem, setInspectingItem] = useState<VerificationItem | null>(null);
+    const [verifyingHRId, setVerifyingHRId] = useState<string | null>(null);
+
+    const handleVerifyEmployment = async (item: VerificationItem) => {
+        if (!item.hr_email || item.hr_email === 'N/A') {
+            alert('No HR email provided for this application.');
+            return;
+        }
+
+        if (!confirm(`Send employment verification email to ${item.hr_email}? The applicant will be CC'd.`)) return;
+
+        setVerifyingHRId(item.loan_id);
+        try {
+            const res = await fetch('/api/admin/verify-employment', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                },
+                body: JSON.stringify({ loanId: item.loan_id })
+            });
+
+            const data = await res.json();
+            if (data.success) {
+                alert(`✅ ${data.message}`);
+                fetchQueue(); // Refresh to show updated status
+            } else {
+                alert('❌ Failed: ' + data.error);
+            }
+        } catch (e) {
+            console.error(e);
+            alert('Network Error');
+        } finally {
+            setVerifyingHRId(null);
+        }
+    };
 
     const handleRunFaceCheck = async (item: VerificationItem) => {
+        // ... (keep existing handleRunFaceCheck logic if possible, but for replace_file_content brevity I am replacing the surrounding block. 
+        // Wait, handleRunFaceCheck is long. I should target smaller chunks.)
         if (!item.documents?.id_url || !item.documents?.selfie_url) {
             alert("Error: Missing ID or Selfie documents.")
             return
@@ -66,6 +117,7 @@ export default function VerificationPage() {
 
         if (!confirm(`Run AWS Rekognition analysis for ${item.full_name}?`)) return
 
+        // ... (rest of function)
         setCheckingFaceId(item.loan_id)
         try {
             const res = await fetch('/api/verify-face', {
@@ -90,13 +142,13 @@ export default function VerificationPage() {
                     msg: data.success
                         ? (data.isMatch ? `✅ Verified (${score}%)` : `⚠️ Low Match (${score}%)`)
                         : `❌ Error: ${data.message || data.error || "Unknown"}`,
-                    details: data.details || "",
+                    details: (typeof data.details === 'object' ? JSON.stringify(data.details) : data.details) || "",
                     timestamp: new Date().toLocaleTimeString()
                 }
             }))
 
             if (data.success) {
-                fetchQueue()
+                // fetchQueue() // Don't refetch whole queue, just update state if needed
             } else {
                 console.error("AWS Check Failed:", data)
             }
@@ -108,7 +160,21 @@ export default function VerificationPage() {
         }
     }
 
-    const handleRequestRetake = async (item: VerificationItem, type: 'id' | 'selfie' | 'bank_statement') => {
+    // New Function for Local Inspection Pass
+    const handlePassInspection = (item: VerificationItem) => {
+        setQueue(prev => prev.map(q => q.loan_id === item.loan_id ? { ...q, inspected: true } : q));
+        setInspectingItem(null);
+    }
+
+
+
+    const handleRequestRetake = async (item: VerificationItem, type: 'id' | 'selfie' | 'bank_statement' | 'payslip') => {
+        // UI State Sync: Check if request already pending
+        if (item.requests?.[type]?.status === 'pending') {
+            alert(`A ${type.replace('_', ' ')} retake has already been requested for this applicant.`);
+            return;
+        }
+
         const reason = prompt(`Reason for requesting new ${type.toUpperCase()}? (e.g. 'Blurry', 'Glare', 'Cut off')`)
         if (!reason) return
 
@@ -125,7 +191,29 @@ export default function VerificationPage() {
             const data = await res.json()
             if (data.success) {
                 alert(`Request for new ${type.toUpperCase()} sent to ${item.full_name}.`)
-                fetchQueue()
+
+                // UI State Sync: Immediately update local state for faster feedback
+                setQueue(prev => prev.map(q =>
+                    q.loan_id === item.loan_id
+                        ? {
+                            ...q,
+                            requests: {
+                                ...q.requests,
+                                [type]: { reason, status: 'pending' }
+                            }
+                        }
+                        : q
+                ));
+                // Also update inspecting item if open
+                if (inspectingItem?.loan_id === item.loan_id) {
+                    setInspectingItem(prev => prev ? {
+                        ...prev,
+                        requests: {
+                            ...prev.requests,
+                            [type]: { reason, status: 'pending' }
+                        }
+                    } : null);
+                }
             } else {
                 alert("Error: " + data.error)
             }
@@ -382,12 +470,23 @@ export default function VerificationPage() {
                                                             <span>View Full Size</span>
                                                         </div>
                                                     </div>
+                                                    <Button
+                                                        size="sm"
+                                                        className={`w-full gap-2 ${item.inspected ? 'bg-green-100 text-green-700 border-green-200 hover:bg-green-200' : 'bg-blue-100 text-blue-700 border-blue-200 hover:bg-blue-200 border'}`}
+                                                        onClick={(e) => { e.stopPropagation(); setInspectingItem(item); }}
+                                                    >
+                                                        {item.inspected ? <Check className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                                                        {item.inspected ? 'Inspected' : 'Inspect & Verify'}
+                                                    </Button>
                                                     <div className="grid grid-cols-2 gap-2">
                                                         <Button variant="outline" size="sm" className="bg-transparent border-slate-600 text-slate-300 hover:text-white" onClick={() => handleViewDocument(item.documents?.id_url)}>
                                                             View ID Doc
                                                         </Button>
                                                         <Button variant="outline" size="sm" className="bg-transparent border-slate-600 text-slate-300 hover:text-white" onClick={() => handleViewDocument(item.documents?.payslip_url)}>
-                                                            View Bank St.
+                                                            View 3-Month St.
+                                                        </Button>
+                                                        <Button variant="outline" size="sm" className="bg-transparent border-slate-600 text-slate-300 hover:text-white col-span-2" onClick={() => handleViewDocument(item.documents?.recent_payslip_url)}>
+                                                            View Payslip
                                                         </Button>
                                                     </div>
                                                 </div>
@@ -473,6 +572,13 @@ export default function VerificationPage() {
                                                     >
                                                         {item.requests?.['bank_statement']?.status === 'pending' ? 'Statement Pending' : 'Request New Bank Statement'}
                                                     </button>
+                                                    <button
+                                                        onClick={(e) => { e.stopPropagation(); handleRequestRetake(item, 'payslip') }}
+                                                        disabled={item.requests?.['payslip']?.status === 'pending'}
+                                                        className={`col-span-2 text-xs border rounded px-2 py-1 ${item.requests?.['payslip']?.status === 'pending' ? 'text-slate-500 border-slate-700 cursor-not-allowed' : 'text-purple-400 hover:text-purple-300 border-slate-600'}`}
+                                                    >
+                                                        {item.requests?.['payslip']?.status === 'pending' ? 'Payslip Pending' : 'Request New Payslip'}
+                                                    </button>
                                                 </div>
                                             </div>
                                         </div>
@@ -494,8 +600,12 @@ export default function VerificationPage() {
                                                             </span>
                                                         )}
                                                     </div>
-                                                    <div className="text-sm text-slate-500 font-mono flex gap-2">
+                                                    <div className="text-sm text-slate-500 font-mono flex gap-2 items-center">
                                                         <span>ID: {item.national_id}</span>
+                                                        <span className="text-slate-300">|</span>
+                                                        <a href={`tel:${item.phone}`} className="hover:text-blue-600 flex items-center gap-1">
+                                                            📞 {item.phone}
+                                                        </a>
                                                         {item.reference_id && (
                                                             <span className="bg-slate-200 px-1 rounded text-xs py-0.5 flex items-center">
                                                                 {item.reference_id}
@@ -537,8 +647,62 @@ export default function VerificationPage() {
                                                     <p className="text-xs text-slate-500 uppercase">Docs Submitted</p>
                                                     <div className="flex gap-1 mt-1">
                                                         {item.documents?.id_url && item.requests?.['id']?.status !== 'pending' ? <div className="w-2 h-2 rounded-full bg-green-500" title="ID: Received" /> : <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="ID: Missing / Update Requested" />}
-                                                        {item.documents?.payslip_url && item.requests?.['bank_statement']?.status !== 'pending' ? <div className="w-2 h-2 rounded-full bg-green-500" title="Statement: Received" /> : <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Statement: Missing / Update Requested" />}
                                                         {item.documents?.selfie_url && item.requests?.['selfie']?.status !== 'pending' ? <div className="w-2 h-2 rounded-full bg-green-500" title="Selfie: Received" /> : <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Selfie: Missing / Update Requested" />}
+                                                        {item.documents?.payslip_url && item.requests?.['bank_statement']?.status !== 'pending' ? <div className="w-2 h-2 rounded-full bg-green-500" title="Statement: Received" /> : <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Statement: Missing / Update Requested" />}
+                                                        {item.documents?.payslip_url && item.requests?.['payslip']?.status !== 'pending' ? <div className="w-2 h-2 rounded-full bg-green-500" title="Payslip: Received" /> : <div className="w-2 h-2 rounded-full bg-red-500 animate-pulse" title="Payslip: Missing / Update Requested" />}
+                                                    </div>
+                                                </div>
+                                            </div>
+
+                                            {/* HR & Next of Kin Details */}
+                                            <div className="grid grid-cols-2 gap-x-8 gap-y-4 mb-8 pt-4 border-t border-slate-100">
+                                                <div className="col-span-2">
+                                                    <h4 className="text-sm font-semibold text-slate-900 mb-2">Employment Contact (HR)</h4>
+                                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                                        <div>
+                                                            <p className="text-xs text-slate-500 uppercase">HR Name</p>
+                                                            <p className="font-medium">{item.hr_name || 'N/A'}</p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs text-slate-500 uppercase">Contact</p>
+                                                            <div className="flex flex-col">
+                                                                {item.hr_phone && <a href={`tel:${item.hr_phone}`} className="text-blue-600 hover:underline text-xs">{item.hr_phone}</a>}
+                                                                {item.hr_email && <a href={`mailto:${item.hr_email}`} className="text-blue-600 hover:underline text-xs">{item.hr_email}</a>}
+                                                                {!item.hr_phone && !item.hr_email && <span className="text-slate-400">N/A</span>}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                <button
+                                                    onClick={() => handleVerifyEmployment(item)}
+                                                    disabled={verifyingHRId === item.loan_id || !item.hr_email || item.hr_email === 'N/A'}
+                                                    className={`mt-3 text-xs border rounded px-3 py-1.5 flex items-center gap-1 ${!item.hr_email || item.hr_email === 'N/A'
+                                                        ? 'text-slate-400 border-slate-200 cursor-not-allowed'
+                                                        : item.hr_verification_requested
+                                                            ? 'text-amber-600 border-amber-200 hover:bg-amber-50'
+                                                            : 'text-blue-600 border-blue-200 hover:bg-blue-50'
+                                                        }`}
+                                                >
+                                                    {verifyingHRId === item.loan_id
+                                                        ? 'Sending...'
+                                                        : item.hr_verification_requested
+                                                            ? '🔄 Re-send Verification to HR'
+                                                            : '📧 Verify Employment via HR'}
+                                                </button>
+                                                {item.hr_verification_requested && (
+                                                    <p className="text-xs text-green-600 mt-1">✓ Verification email sent</p>
+                                                )}
+                                                <div className="col-span-2 mt-2">
+                                                    <h4 className="text-sm font-semibold text-slate-900 mb-2">Next of Kin</h4>
+                                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                                        <div>
+                                                            <p className="text-xs text-slate-500 uppercase">Name & Relation</p>
+                                                            <p className="font-medium">{item.kin_name || 'N/A'} <span className="text-slate-500 font-normal">({item.kin_relationship || 'N/A'})</span></p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs text-slate-500 uppercase">Contact</p>
+                                                            <p className="font-medium">{item.kin_contact ? <a href={`tel:${item.kin_contact}`} className="text-blue-600 hover:underline">{item.kin_contact}</a> : 'N/A'}</p>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -613,75 +777,188 @@ export default function VerificationPage() {
             <Footer />
 
             {/* Credit Report Modal */}
-            {viewingReport && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <Card className="w-full max-w-lg max-h-[80vh] overflow-y-auto">
-                        <CardHeader className="flex flex-row justify-between items-center sticky top-0 bg-white border-b">
-                            <CardTitle>Credit Report</CardTitle>
-                            <Button size="icon" variant="ghost" onClick={() => setViewingReport(null)}><X className="w-4 h-4" /></Button>
-                        </CardHeader>
-                        <CardContent className="p-6">
-                            <div className="space-y-4">
-                                <div className="bg-slate-100 p-4 rounded text-center">
-                                    <div className="text-3xl font-bold">{viewingReport.score}</div>
-                                    <div className="text-sm text-muted-foreground">{viewingReport.riskBand}</div>
+            {
+                viewingReport && (
+                    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                        <Card className="w-full max-w-lg max-h-[80vh] overflow-y-auto">
+                            <CardHeader className="flex flex-row justify-between items-center sticky top-0 bg-white border-b">
+                                <CardTitle>Credit Report</CardTitle>
+                                <Button size="icon" variant="ghost" onClick={() => setViewingReport(null)}><X className="w-4 h-4" /></Button>
+                            </CardHeader>
+                            <CardContent className="p-6">
+                                <div className="space-y-4">
+                                    <div className="bg-slate-100 p-4 rounded text-center">
+                                        <div className="text-3xl font-bold">{viewingReport.score}</div>
+                                        <div className="text-sm text-muted-foreground">{viewingReport.riskBand}</div>
+                                    </div>
+                                    <div>
+                                        <h4 className="font-semibold mb-2">Account History</h4>
+                                        {viewingReport.history.map((h: any, i: number) => (
+                                            <div key={i} className="flex justify-between text-sm py-2 border-b last:border-0">
+                                                <span>{h.provider} ({h.type})</span>
+                                                <span className={h.status === 'Active' ? 'text-blue-600' : h.status === 'Defaulted' ? 'text-red-600' : 'text-slate-500'}>{h.status}</span>
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                                <div>
-                                    <h4 className="font-semibold mb-2">Account History</h4>
-                                    {viewingReport.history.map((h: any, i: number) => (
-                                        <div key={i} className="flex justify-between text-sm py-2 border-b last:border-0">
-                                            <span>{h.provider} ({h.type})</span>
-                                            <span className={h.status === 'Active' ? 'text-blue-600' : h.status === 'Defaulted' ? 'text-red-600' : 'text-slate-500'}>{h.status}</span>
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
+                            </CardContent>
+                        </Card>
+                    </div>
+                )
+            }
 
             {/* Audit History Modal (Improved) */}
-            {viewingHistory && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <Card className="w-full max-w-lg max-h-[80vh] overflow-y-auto">
-                        <CardHeader className="flex flex-row justify-between items-center sticky top-0 bg-white border-b">
-                            <CardTitle>Audit Timeline</CardTitle>
-                            <Button size="icon" variant="ghost" onClick={() => setViewingHistory(null)}><X className="w-4 h-4" /></Button>
-                        </CardHeader>
-                        <CardContent className="p-6">
-                            {auditLogs.length === 0 ? (
-                                <p className="text-center text-slate-500">No events logged yet.</p>
-                            ) : (
-                                <div className="relative border-l-2 border-slate-200 ml-3 space-y-6">
-                                    {auditLogs.map(log => (
-                                        <div key={log.id} className="relative pl-6">
-                                            <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white border-4 border-blue-500"></div>
-                                            <div className="flex flex-col">
-                                                <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
-                                                    {new Date(log.created_at).toLocaleDateString()} &middot; {new Date(log.created_at).toLocaleTimeString()}
-                                                </span>
-                                                <h4 className="font-bold text-slate-800 text-sm mt-1">{log.action.replace(/_/g, ' ')}</h4>
+            {
+                viewingHistory && (
+                    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                        <Card className="w-full max-w-lg max-h-[80vh] overflow-y-auto">
+                            <CardHeader className="flex flex-row justify-between items-center sticky top-0 bg-white border-b">
+                                <CardTitle>Audit Timeline</CardTitle>
+                                <Button size="icon" variant="ghost" onClick={() => setViewingHistory(null)}><X className="w-4 h-4" /></Button>
+                            </CardHeader>
+                            <CardContent className="p-6">
+                                {auditLogs.length === 0 ? (
+                                    <p className="text-center text-slate-500">No events logged yet.</p>
+                                ) : (
+                                    <div className="relative border-l-2 border-slate-200 ml-3 space-y-6">
+                                        {auditLogs.map(log => (
+                                            <div key={log.id} className="relative pl-6">
+                                                <div className="absolute -left-[9px] top-0 w-4 h-4 rounded-full bg-white border-4 border-blue-500"></div>
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-semibold text-slate-500 uppercase tracking-wide">
+                                                        {new Date(log.created_at).toLocaleDateString()} &middot; {new Date(log.created_at).toLocaleTimeString()}
+                                                    </span>
+                                                    <h4 className="font-bold text-slate-800 text-sm mt-1">{log.action.replace(/_/g, ' ')}</h4>
 
-                                                {log.details && Object.keys(log.details).length > 0 && (
-                                                    <div className="mt-2 bg-slate-50 p-3 rounded-md text-xs text-slate-600 border border-slate-100">
-                                                        {Object.entries(log.details).map(([key, value]) => (
-                                                            <div key={key} className="flex justify-between border-b border-slate-200 last:border-0 py-1">
-                                                                <span className="font-medium capitalize text-slate-500">{key}:</span>
-                                                                <span className="text-slate-700 truncate max-w-[150px]">{String(value)}</span>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
+                                                    {log.details && Object.keys(log.details).length > 0 && (
+                                                        <div className="mt-2 bg-slate-50 p-3 rounded-md text-xs text-slate-600 border border-slate-100">
+                                                            {Object.entries(log.details).map(([key, value]) => (
+                                                                <div key={key} className="flex justify-between border-b border-slate-200 last:border-0 py-1">
+                                                                    <span className="font-medium capitalize text-slate-500">{key}:</span>
+                                                                    <span className="text-slate-700 truncate max-w-[150px]">{String(value)}</span>
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    )}
+                                                </div>
                                             </div>
-                                        </div>
-                                    ))}
+                                        ))}
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </div>
+                )
+            }
+            {/* Manual Inspection Modal */}
+            {
+                inspectingItem && (
+                    <div className="fixed inset-0 bg-black/90 z-[60] flex flex-col animate-in fade-in duration-200">
+                        {/* Header */}
+                        <div className="flex justify-between items-center px-6 py-4 bg-slate-900 text-white border-b border-slate-700">
+                            <div>
+                                <h2 className="text-xl font-bold flex items-center gap-3">
+                                    <UserCheck className="w-6 h-6 text-blue-400" />
+                                    {inspectingItem.full_name}
+                                </h2>
+                                <p className="text-sm text-slate-400 font-mono mt-1">
+                                    ID: {inspectingItem.national_id} &bull; Loan: {inspectingItem.loan_id.slice(0, 8)}...
+                                </p>
+                            </div>
+                            <div className="flex items-center gap-4">
+                                <div className="flex bg-slate-800 rounded-lg p-1 border border-slate-700">
+                                    <Button
+                                        variant="ghost"
+                                        className="text-red-400 hover:text-red-300 hover:bg-red-900/20 gap-2"
+                                        onClick={() => handleRequestRetake(inspectingItem, 'id')}
+                                    >
+                                        Bad ID
+                                    </Button>
+                                    <div className="w-px bg-slate-700 mx-1"></div>
+                                    <Button
+                                        variant="ghost"
+                                        className="text-red-400 hover:text-red-300 hover:bg-red-900/20 gap-2"
+                                        onClick={() => handleRequestRetake(inspectingItem, 'selfie')}
+                                    >
+                                        Bad Selfie
+                                    </Button>
                                 </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </div>
-            )}
-        </div>
+                                <Button
+                                    className="bg-green-600 hover:bg-green-500 gap-2 px-6"
+                                    onClick={() => {
+                                        handlePassInspection(inspectingItem);
+                                    }}
+                                >
+                                    <Check className="w-4 h-4" /> Pass Inspection
+                                </Button>
+                                <Button
+                                    size="icon"
+                                    variant="ghost"
+                                    className="text-slate-400 hover:text-white"
+                                    onClick={() => setInspectingItem(null)}
+                                >
+                                    <X className="w-6 h-6" />
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Split View Content */}
+                        <div className="flex-1 grid grid-cols-2 gap-px bg-slate-800 overflow-hidden">
+                            {/* Left: ID Document */}
+                            <div className="relative bg-black flex flex-col group">
+                                <div className="absolute top-4 left-4 z-10 bg-black/50 text-white text-xs px-3 py-1 rounded-full backdrop-blur-md border border-white/10 font-medium">
+                                    🆔 ID Document
+                                </div>
+                                <div className="flex-1 relative overflow-hidden flex items-center justify-center p-4">
+                                    {inspectingItem.documents?.id_url ? (
+                                        <div className="relative w-full h-full flex items-center justify-center overflow-auto">
+                                            <img
+                                                src={inspectingItem.documents.id_url}
+                                                className="max-w-none max-h-full object-contain transition-transform duration-200 cursor-zoom-in active:scale-[2.5] active:cursor-move"
+                                                alt="ID Document"
+                                                title="Click and hold to Zoom"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="text-slate-500 flex flex-col items-center">
+                                            <AlertCircle className="w-10 h-10 mb-2 opacity-50" />
+                                            <span>No ID Document</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Right: Live Selfie */}
+                            <div className="relative bg-black flex flex-col">
+                                <div className="absolute top-4 left-4 z-10 bg-black/50 text-white text-xs px-3 py-1 rounded-full backdrop-blur-md border border-white/10 font-medium">
+                                    🤳 Live Selfie
+                                </div>
+                                {/* Hint for Zoom */}
+                                <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10 text-white/50 text-[10px] pointer-events-none">
+                                    Click &amp; Hold to Zoom
+                                </div>
+                                <div className="flex-1 relative overflow-hidden flex items-center justify-center p-4">
+                                    {inspectingItem.documents?.selfie_url ? (
+                                        <div className="relative w-full h-full flex items-center justify-center overflow-auto">
+                                            <img
+                                                src={inspectingItem.documents.selfie_url}
+                                                className="max-w-none max-h-full object-contain transition-transform duration-200 cursor-zoom-in active:scale-[2.5] active:cursor-move"
+                                                alt="Selfie"
+                                                title="Click and hold to Zoom"
+                                            />
+                                        </div>
+                                    ) : (
+                                        <div className="text-slate-500 flex flex-col items-center">
+                                            <AlertCircle className="w-10 h-10 mb-2 opacity-50" />
+                                            <span>No Selfie</span>
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )
+            }
+        </div >
     )
 }

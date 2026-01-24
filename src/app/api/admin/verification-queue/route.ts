@@ -14,7 +14,7 @@ export async function GET(request: Request) {
         // 2. Fetch Pending Loans
         const { data: loans, error: loanError } = await supabase
             .from('loans')
-            .select('*, profiles!inner(full_name, national_id)')
+            .select('*, profiles!inner(full_name, national_id, phone_number)')
             .eq('status', 'pending');
 
         if (loanError) throw loanError;
@@ -44,6 +44,7 @@ export async function GET(request: Request) {
             const existingDocs = l.documents || {};
             const rawId = existingDocs.id_url || appData.idDocument || appData.id_url;
             const rawPayslip = existingDocs.payslip_url || appData.payslip || appData.payslip_url;
+            const rawRecentPayslip = existingDocs.recentPayslip_url || appData.recentPayslip || null;
             const rawSelfie = existingDocs.selfie_url || appData.selfie || appData.selfie_url || appData.selfieUrl;
             const rawPreviousSelfie = appData.previous_selfie_url;
 
@@ -71,9 +72,10 @@ export async function GET(request: Request) {
                 return data?.signedUrl || url;
             }
 
-            const [idSigned, payslipSigned, selfieSigned, prevSelfieSigned] = await Promise.all([
+            const [idSigned, payslipSigned, recentPayslipSigned, selfieSigned, prevSelfieSigned] = await Promise.all([
                 sign(rawId),
                 sign(rawPayslip),
+                sign(rawRecentPayslip),
                 sign(rawSelfie),
                 sign(rawPreviousSelfie)
             ]);
@@ -87,14 +89,15 @@ export async function GET(request: Request) {
                 created_at: l.created_at,
                 full_name: l.profiles?.full_name || appData.firstName + ' ' + appData.lastName || 'Unknown',
                 national_id: l.profiles?.national_id || appData.nationalId || 'Unknown',
+                phone: l.profiles?.phone_number || appData.phone || 'Unknown',
                 monthly_income: monthlyIncome,
                 employer_name: employerName,
                 employment_type: employmentType,
-                is_employed: !!v?.is_employed,
-                confidence: v?.confidence || 0,
-                // New fields for persistence
-                face_verified: v?.face_verified,
-                verified_at: v?.updated_at || v?.created_at,
+                // Freshness Check: Only show verification if it happened AFTER the loan application
+                is_employed: !!v?.is_employed, // Employment status is generally sticky, so we keep it
+                confidence: (v?.updated_at && new Date(v.updated_at) > new Date(l.created_at)) ? (v.confidence || 0) : 0,
+                face_verified: (v?.updated_at && new Date(v.updated_at) > new Date(l.created_at)) ? v.face_verified : undefined,
+                verified_at: (v?.updated_at && new Date(v.updated_at) > new Date(l.created_at)) ? v.updated_at : undefined,
                 reference_id: l.application_data?.refId || 'N/A',
                 status_detail: l.application_data?.status_detail,
                 retake_reason: l.application_data?.retakeReason,
@@ -103,9 +106,20 @@ export async function GET(request: Request) {
                 documents: {
                     id_url: idSigned || '',
                     payslip_url: payslipSigned || '',
+                    recent_payslip_url: recentPayslipSigned || '',
                     selfie_url: selfieSigned || '',
                     previous_selfie_url: prevSelfieSigned || ''
-                }
+                },
+                // HR & Kin Details
+                hr_name: appData.hrName || 'N/A',
+                hr_email: appData.hrEmail || 'N/A',
+                hr_phone: appData.hrPhone || 'N/A',
+                hr_verification_requested: appData.hr_verification_requested || false,
+                hr_verification_requested_at: appData.hr_verification_requested_at || null,
+                kin_name: appData.nextOfKinName || 'N/A',
+                kin_relationship: appData.nextOfKinRelationship || 'N/A',
+                kin_contact: appData.nextOfKinContact || 'N/A',
+                kin_address: appData.nextOfKinAddress || 'N/A'
             };
         });
 

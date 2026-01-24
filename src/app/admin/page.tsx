@@ -185,6 +185,23 @@ export default function AdminRouter() {
                                 </div>
                             </CardContent>
                         </Card>
+
+                        {/* User Registry Card */}
+                        <Card className="hover:shadow-lg transition-shadow cursor-pointer border-l-4 border-l-orange-500" onClick={() => router.push('/admin/users')}>
+                            <CardHeader className="flex flex-row items-center justify-between pb-2">
+                                <CardTitle className="text-xl text-orange-900">User Registry</CardTitle>
+                                <UserCog className="w-8 h-8 text-orange-500" />
+                            </CardHeader>
+                            <CardContent>
+                                <p className="text-slate-600 mb-4">
+                                    View all registered users and their account completion status.
+                                </p>
+                                <div className="flex items-center gap-2 text-sm font-medium text-orange-600">
+                                    <UserCog className="w-4 h-4" />
+                                    User Management
+                                </div>
+                            </CardContent>
+                        </Card>
                     </div>
                 </div>
             </main>

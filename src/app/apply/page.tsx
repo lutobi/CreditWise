@@ -34,6 +34,7 @@ export default function ApplyPage() {
     const [uploading, setUploading] = React.useState<string | null>(null)
     const [errors, setErrors] = React.useState<Record<string, string>>({})
     const [existingLoanId, setExistingLoanId] = React.useState<string | null>(null)
+    const [capturedSelfiePreview, setCapturedSelfiePreview] = React.useState<string | null>(null)
 
     // Form State
     const [formData, setFormData] = React.useState({
@@ -84,6 +85,7 @@ export default function ApplyPage() {
         // 6. Documents
         idDocument: "",
         payslip: "",
+        recentPayslip: "",
         selfie: "",
 
         // 7. Declaration
@@ -230,7 +232,7 @@ export default function ApplyPage() {
         }
     }
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: 'idDocument' | 'payslip') => {
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, fieldName: 'idDocument' | 'payslip' | 'recentPayslip') => {
         const file = e.target.files?.[0]
         if (!file) return
         if (!user) return
@@ -269,6 +271,11 @@ export default function ApplyPage() {
 
     const handleSelfieCapture = async (file: File | null) => {
         if (!file || !user) return;
+
+        // Immediately show preview using local blob URL
+        const previewUrl = URL.createObjectURL(file);
+        setCapturedSelfiePreview(previewUrl);
+
         setUploading('selfie');
         try {
             const fileName = `${user.id}/selfie-${Date.now()}.jpg`;
@@ -286,6 +293,8 @@ export default function ApplyPage() {
             toast.success("Selfie verified and uploaded");
         } catch (error: any) {
             toast.error("Selfie upload failed: " + error.message);
+            // Clear preview on failure
+            setCapturedSelfiePreview(null);
         } finally {
             setUploading(null);
         }
@@ -362,68 +371,37 @@ export default function ApplyPage() {
         }
 
         // Submit Application (Step 8 is Success)
+        // Submit Application (Step 8 is Success)
         try {
             if (!user) throw new Error("Not authenticated");
 
-            // 1. Upsert Profile
-            await supabase.from('profiles').upsert({
-                id: user.id,
-                full_name: `${formData.firstName} ${formData.lastName}`.trim(),
-                national_id: formData.nationalId,
-                phone_number: formData.phone,
-                updated_at: new Date().toISOString()
-            })
+            // We now submit via API to capture IP and User Agent for electronic signature traceability
+            const response = await fetch('/api/loans/submit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                },
+                body: JSON.stringify({
+                    ...formData,
+                    // Send explicit client user agent as backup
+                    clientUserAgent: navigator.userAgent
+                })
+            });
 
-            // 2. Upsert Verification
-            const { error: verifError } = await supabase.from('verifications').upsert({
-                user_id: user.id,
-                employment_status: formData.employmentType,
-                monthly_income: parseFloat(formData.monthlyIncome),
-                employer_name: formData.employerName,
-                updated_at: new Date().toISOString()
-            }, { onConflict: 'user_id' });
+            const result = await response.json();
 
-            if (verifError) {
-                console.error('Verification Upsert Error:', verifError)
-                // Continue anyway, not critical blocking
+            if (!result.success) {
+                throw new Error(result.error || "Submission failed");
             }
 
-            // 3. Create Loan
-            // Ensure loanAmount is a number
-            const amount = typeof formData.loanAmount === 'string' ? parseFloat(formData.loanAmount) : formData.loanAmount;
-
-            // Generate Reference ID
-            const refId = `OMR-${Math.floor(100000 + Math.random() * 900000)}`;
-            const submissionData = { ...formData, refId };
-
-            const { data: loan, error: loanError } = await supabase.from('loans').insert({
-                user_id: user.id,
-                amount: amount,
-                duration_months: formData.repaymentPeriod, // Matches DB constraint
-                monthly_payment: amount / formData.repaymentPeriod, // Simple calc to satisfy constraint
-                interest_rate: 5, // Default interest rate to satisfy constraint if any
-                purpose: formData.loanPurpose,
-                status: 'pending',
-                application_data: submissionData // JSONB column
-            }).select().single()
-
-            if (loanError) throw loanError;
-
             // Success
-            console.log('✅ Application submitted successfully. Transitioning to Step 8.');
+            console.log('✅ Application submitted successfully via API. Transitioning to Step 8.');
             setStep(8)
             toast.success("Application submitted successfully!")
 
-            // Notify Admin via API
-            try {
-                await fetch('/api/admin/notify', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ loanId: loan.id })
-                });
-            } catch (notifyError) {
-                console.error('Notification failed:', notifyError);
-            }
+            // Clear draft
+            localStorage.removeItem('nomad_loan_draft');
 
         } catch (error: any) {
             console.error('Submission Error:', error)
@@ -674,21 +652,46 @@ export default function ApplyPage() {
                                         onChange={(e) => updateField('selfie', e.target.value)}
                                     />
                                     <div className="border rounded-lg p-2 bg-muted/50">
-                                        {!formData.selfie ? (
+                                        {(!formData.selfie && !capturedSelfiePreview) ? (
                                             <LiveSelfie onCapture={handleSelfieCapture} error={errors.selfie} />
                                         ) : (
                                             <div className="text-center">
-                                                <img src={formData.selfie} alt="Selfie" className="mx-auto h-32 w-32 object-cover rounded-full border-2 border-green-500 mb-2" />
-                                                <Button type="button" variant="ghost" size="sm" onClick={() => updateField('selfie', '')}>Retake</Button>
+                                                <div className="relative inline-block">
+                                                    <img
+                                                        src={formData.selfie || capturedSelfiePreview || ''}
+                                                        alt="Selfie"
+                                                        className="mx-auto h-32 w-32 object-cover rounded-full border-2 border-green-500 mb-2"
+                                                    />
+                                                    {uploading === 'selfie' && (
+                                                        <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+                                                            <Spinner size="sm" className="text-white" />
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <p className="text-xs text-green-600 mb-1">
+                                                    {uploading === 'selfie' ? 'Uploading...' : '✓ Captured'}
+                                                </p>
+                                                <Button
+                                                    type="button"
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    onClick={() => {
+                                                        updateField('selfie', '');
+                                                        setCapturedSelfiePreview(null);
+                                                    }}
+                                                    disabled={uploading === 'selfie'}
+                                                >
+                                                    Retake
+                                                </Button>
                                             </div>
                                         )}
                                     </div>
                                     {errors.selfie && <p className="text-xs text-red-500">{errors.selfie}</p>}
                                 </div>
 
-                                {/* Payslip */}
+                                {/* Bank Statement (Renamed Label) */}
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">3 Months Bank Statement (PDF)</label>
+                                    <label className="text-sm font-medium">Recent 3 Months Stamped Bank Statement (PDF)</label>
                                     <div className="flex gap-4 items-center">
                                         <Button type="button" variant="outline" className="relative w-full" disabled={uploading === 'payslip'}>
                                             {uploading === 'payslip' ? <Spinner size="sm" className="mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
@@ -707,6 +710,29 @@ export default function ApplyPage() {
                                         onChange={(e) => updateField('payslip', e.target.value)}
                                     />
                                     {errors.payslip && <p className="text-xs text-red-500">{errors.payslip}</p>}
+                                </div>
+
+                                {/* Most Recent Payslip (New Section) */}
+                                <div className="space-y-2">
+                                    <label className="text-sm font-medium">Most Recent Payslip (PDF/Image)</label>
+                                    <div className="flex gap-4 items-center">
+                                        <Button type="button" variant="outline" className="relative w-full" disabled={uploading === 'recentPayslip'}>
+                                            {uploading === 'recentPayslip' ? <Spinner size="sm" className="mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                                            {formData.recentPayslip ? "Change File" : "Upload Payslip"}
+                                            <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileUpload(e, 'recentPayslip')} accept="image/*,.pdf" />
+                                        </Button>
+                                        {formData.recentPayslip && <CheckCircle2 className="text-green-500 h-6 w-6" />}
+                                    </div>
+                                    {/* Test Bypass Input */}
+                                    <input
+                                        type="text"
+                                        id="recentPayslip-bypass"
+                                        name="recentPayslip"
+                                        className="sr-only"
+                                        tabIndex={-1}
+                                        onChange={(e) => updateField('recentPayslip', e.target.value)}
+                                    />
+                                    {errors.recentPayslip && <p className="text-xs text-red-500">{errors.recentPayslip}</p>}
                                 </div>
                             </div>
                         )
@@ -729,7 +755,8 @@ export default function ApplyPage() {
                                         <p><strong>2. Credit Check Consent:</strong> I voluntarily consent to OMARI FINANCE conducting credit checks and affordability assessments as required by the Financial Institutions and Markets Act (FIMA) and NAMFISA regulations. This includes verifying my income, employment details, and credit history with registered credit bureaus.</p>
                                         <p><strong>3. Data Privacy:</strong> I authorize OMARI FINANCE to process my personal data in accordance with their Privacy Policy for the purpose of assessing this loan application.</p>
                                         <p><strong>4. Repayment Commitment:</strong> I acknowledge that by signing this agreement, I am legally bound to repay the loan amount plus interest and fees as stipulated in the Loan Agreement.</p>
-                                        <p><strong>5. Rights & Complaints:</strong> I acknowledge my right to lodge a complaint with OMARI FINANCE's internal dispute resolution department, and subsequently to NAMFISA if the matter remains unresolved.</p>
+                                        <p><strong>5. Debit Order Authority:</strong> I hereby authorize OMARI FINANCE to issue and deliver payment instructions to the bank for collection against my account at the abovementioned bank on condition that the sum of such payment instructions will never exceed my obligations as agreed to in the Agreement. I understand that the withdrawals authorized here will be processed through a computerized system provided by the Namibian Banks.</p>
+                                        <p><strong>6. Rights & Complaints:</strong> I acknowledge my right to lodge a complaint with OMARI FINANCE's internal dispute resolution department, and subsequently to NAMFISA if the matter remains unresolved.</p>
                                     </div>
                                 </div>
 

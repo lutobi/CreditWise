@@ -63,7 +63,7 @@ export async function GET(request: Request) {
                 status,
                 created_at,
                 application_data,
-                profiles (
+                profiles:user_id (
                     full_name,
                     national_id,
                     email,
@@ -78,16 +78,24 @@ export async function GET(request: Request) {
 
         const { data: loans, error } = await query
 
-        if (error) throw error
+        if (error) {
+            console.error('Loan Book Query Error:', error);
+            throw error;
+        }
 
         // 3. Transform to CSV
         const headers = ['Reference ID', 'Date', 'Customer Name', 'National ID', 'Mobile', 'Amount (N$)', 'Term (Months)', 'Status', 'Purpose']
         const rows = loans.map((loan: any) => {
             const refId = loan.application_data?.refId || 'N/A'
             const date = new Date(loan.created_at).toISOString().split('T')[0]
-            const name = loan.profiles?.full_name || 'Unknown'
-            const nid = loan.profiles?.national_id || 'N/A'
-            const phone = loan.profiles?.phone || 'N/A'
+
+            // Handle profile (could be array or object depending on PostgREST version/setup)
+            let profile = loan.profiles;
+            if (Array.isArray(profile)) profile = profile[0];
+
+            const name = profile?.full_name || 'Unknown'
+            const nid = profile?.national_id || 'N/A'
+            const phone = profile?.phone || 'N/A'
             const amount = loan.amount
             const term = loan.duration_months
             const st = loan.status

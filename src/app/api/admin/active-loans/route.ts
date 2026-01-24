@@ -83,6 +83,14 @@ export async function GET(req: NextRequest) {
                 customer_name: profile.full_name || 'Unknown',
                 national_id: profile.national_id || 'N/A',
                 phone: profile.phone || 'N/A',
+                email: profile.email || 'N/A', // Helpful for contact
+                // Banking Details for Batch Export
+                bank_name: loan.application_data?.bankName || 'N/A',
+                account_number: loan.application_data?.accountNumber || 'N/A',
+                branch_code: loan.application_data?.branchCode || 'N/A',
+                account_holder: loan.application_data?.accountHolder || profile.full_name || 'N/A',
+                account_type: loan.application_data?.accountType || 'Savings',
+                loan_ref: loan.application_data?.refId || 'N/A',
                 loan_amount: loan.amount,
                 duration_months: loan.duration_months,
                 total_repayment: Math.round(totalRepayment * 100) / 100,

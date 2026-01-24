@@ -99,6 +99,7 @@ export async function POST(req: Request) {
                 .update({
                     confidence: finalConfidence,
                     face_verified: finalVerified,
+                    updated_at: new Date().toISOString(),
                     // valid_id_failed_reason: failureReason // Optional: if you add this column later
                 })
                 .eq('user_id', userId);

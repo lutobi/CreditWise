@@ -356,7 +356,7 @@ export default function DashboardPage() {
                                         {pendingRequests.map((req: any) => (
                                             <div key={req.type} className="flex items-center justify-between bg-white p-3 rounded border border-amber-100 shadow-sm">
                                                 <div>
-                                                    <span className="font-semibold text-sm block capitalize text-slate-900">{req.type === 'id' ? 'ID Document' : req.type === 'bank_statement' ? 'Bank Statement' : 'Selfie'}</span>
+                                                    <span className="font-semibold text-sm block capitalize text-slate-900">{req.type === 'id' ? 'ID Document' : req.type === 'bank_statement' ? 'Bank Statement' : req.type === 'recentPayslip' ? 'Payslip' : 'Selfie'}</span>
                                                     <span className="text-xs text-amber-700">Reason: "{req.reason}"</span>
                                                 </div>
                                                 <Button size="sm" variant="outline" onClick={() => setActiveActionType(req.type)} className="text-amber-700 border-amber-200 hover:bg-amber-50 h-8">
@@ -388,7 +388,7 @@ export default function DashboardPage() {
                                 {/* Header (Back Button) for Multi-step */}
                                 {pendingRequests.length > 1 && activeActionType && (
                                     <div className="mb-4 flex items-center justify-between border-b pb-2">
-                                        <span className="text-sm font-medium text-slate-500">Updating: <span className="text-slate-900 font-bold capitalize">{activeActionType === 'id' ? 'ID Document' : activeActionType === 'bank_statement' ? 'Bank Statement' : 'Selfie'}</span></span>
+                                        <span className="text-sm font-medium text-slate-500">Updating: <span className="text-slate-900 font-bold capitalize">{activeActionType === 'id' ? 'ID Document' : activeActionType === 'bank_statement' ? 'Bank Statement' : activeActionType === 'recentPayslip' ? 'Payslip' : 'Selfie'}</span></span>
                                         <Button variant="ghost" size="sm" onClick={() => setActiveActionType(null)} className="h-8 text-xs text-slate-500 hover:text-slate-900">
                                             ← Back to List
                                         </Button>
@@ -429,15 +429,15 @@ export default function DashboardPage() {
                                         <div className="border-2 border-dashed border-slate-200 rounded-lg p-8 flex flex-col items-center justify-center text-center">
                                             <FileText className="w-8 h-8 text-slate-400 mb-4" />
                                             <label className="block text-sm font-medium mb-2">
-                                                {activeActionType === 'bank_statement' ? 'Upload Bank Statement' : 'Upload your ID Document'}
+                                                {activeActionType === 'bank_statement' ? 'Upload Bank Statement' : activeActionType === 'recentPayslip' ? 'Upload Payslip' : 'Upload your ID Document'}
                                             </label>
                                             <p className="text-xs text-slate-500 mb-4">
-                                                {activeActionType === 'bank_statement' ? 'Recent 3 months statement (PDF preferred).' : "Passport, National ID, or Driver's License."}
+                                                {activeActionType === 'bank_statement' ? 'Recent 3 months statement (PDF preferred).' : activeActionType === 'recentPayslip' ? 'Most recent payslip.' : "Passport, National ID, or Driver's License."}
                                             </p>
 
                                             <input
                                                 type="file"
-                                                accept={activeActionType === 'bank_statement' ? ".pdf,image/*" : "image/*,.pdf"}
+                                                accept={(activeActionType === 'bank_statement' || activeActionType === 'recentPayslip') ? ".pdf,image/*" : "image/*,.pdf"}
                                                 id="doc-upload"
                                                 className="hidden"
                                                 onChange={(e) => setRetakeFile(e.target.files?.[0] || null)}
@@ -460,7 +460,7 @@ export default function DashboardPage() {
                                                         className="w-full bg-amber-600 hover:bg-amber-700"
                                                     >
                                                         {isRetakeUploading ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Upload className="w-4 h-4 mr-2" />}
-                                                        {activeActionType === 'bank_statement' ? 'Upload Statement' : 'Upload ID'}
+                                                        {activeActionType === 'bank_statement' ? 'Upload Statement' : activeActionType === 'recentPayslip' ? 'Upload Payslip' : 'Upload ID'}
                                                     </Button>
                                                 </div>
                                             )}

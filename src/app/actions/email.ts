@@ -101,24 +101,34 @@ export async function sendLoanDecisionEmail(details: {
     }
 }
 
-export async function sendRetakeEmail(email: string, name: string, reason: string) {
+export async function sendRetakeEmail(email: string, name: string, reason: string, type: 'id' | 'selfie' | 'bank_statement' | 'payslip' = 'selfie') {
     if (!process.env.RESEND_API_KEY) return { success: false, error: "Missing RESEND_API_KEY" };
 
     try {
         const resend = new Resend(process.env.RESEND_API_KEY);
 
+        const typeLabels: Record<string, string> = {
+            'id': 'ID Document',
+            'selfie': 'Live Selfie',
+            'bank_statement': 'Bank Statement',
+            'payslip': 'Payslip'
+        };
+
+        const docLabel = typeLabels[type] || 'Document';
+        const subject = `Action Required: Please Re-submit Your ${docLabel} - Omari Finance`;
+
         await resend.emails.send({
             from: 'Omari Finance <noreply@omarifinance.com>',
             to: email,
-            subject: 'Action Required: Retake Identity Verification - Omari Finance',
+            subject,
             html: `
                 <h1>Action Required</h1>
                 <p>Hi ${name},</p>
-                <p>We reviewed your identity verification documents, but we need you to retake your live selfie.</p>
+                <p>We reviewed your loan application documents, but we need you to re-submit your <strong>${docLabel}</strong>.</p>
                 <p><strong>Reason:</strong> ${reason}</p>
-                <p>Please log in to your dashboard and complete the verification step again.</p>
+                <p>Please log in to your dashboard and complete this step.</p>
                 <br/>
-                <a href="https://omarifinance.com/dashboard" style="background-color: #f59e0b; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Retake Selfie</a>
+                <a href="https://omarifinance.com/dashboard" style="background-color: #f59e0b; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Go to Dashboard</a>
             `
         });
 

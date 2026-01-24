@@ -53,6 +53,8 @@ export async function POST(req: NextRequest) {
             newDocs.id_url = null;
         } else if (type === 'bank_statement') {
             newDocs.payslip_url = null;
+        } else if (type === 'payslip') {
+            newDocs.payslip_url = null; // Same field as bank_statement for now
         } else if (type === 'selfie') {
             previousSelfieUrl = currentDocs.selfie_url; // Capture before clearing
             newDocs.selfie_url = null;
@@ -68,6 +70,7 @@ export async function POST(req: NextRequest) {
                 documents: newDocs,
                 status: 'pending', // Valid statuses: pending, approved, rejected, paid
                 application_data: {
+                    ...(loan.application_data || {}), // PRESERVE EXISTING DATA: HR, Kin, etc.
                     retakeReason: reason || "Document quality issue", // Legacy support
                     retakeType: type || 'selfie', // Legacy support
                     status_detail: 'retake_requested',
@@ -92,8 +95,8 @@ export async function POST(req: NextRequest) {
         }
 
         // 4. Send Email Notification
-        await sendRetakeEmail(userEmail, userName, reason || "ID Verification Issue");
-        console.log(`[Email Sent] To: ${userEmail}`);
+        await sendRetakeEmail(userEmail, userName, reason || "Document quality issue", type || 'selfie');
+        console.log(`[Email Sent] To: ${userEmail} for type: ${type}`);
 
         // 4. Audit Log
         const { logAudit } = await import('@/lib/audit');

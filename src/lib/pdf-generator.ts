@@ -60,7 +60,7 @@ export async function generateLoanAgreement(loan: any, profileData: any): Promis
     drawText(profile?.national_id || 'N/A', 150, y);
     y -= 15;
     drawText('ADDRESS:', 50, y, 10, true);
-    drawText(profile?.address || 'N/A', 150, y);
+    drawText(loan?.application_data?.address || profile?.address || 'N/A', 150, y);
     y -= 40;
 
     // Particulars Table
@@ -107,7 +107,11 @@ export async function generateLoanAgreement(loan: any, profileData: any): Promis
         'The parties consent to the jurisdiction of the Magistrate\'s Court.',
         '',
         '3.5. ACKNOWLEDGEMENT: The Borrower acknowledges that they can afford this loan',
-        'and that the information provided is true and correct.'
+        'and that the information provided is true and correct.',
+        '',
+        '3.6. DEBIT ORDER MANDATE: The Borrower authorizes the Lender to issue payment instructions',
+        'to the bank for collection against their account. These withdrawals will be processed',
+        'through the Namibian banking system.'
     ];
 
     terms.forEach(line => {

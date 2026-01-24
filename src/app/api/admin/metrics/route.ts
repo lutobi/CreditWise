@@ -24,10 +24,10 @@ export async function GET(request: Request) {
             { data: dbCheck, error: dbError } // Latency Check
         ] = await Promise.all([
             // 1. Pending (Verification Queue)
-            supabase.from('loans').select('*', { count: 'exact', head: true }).eq('status', 'submitted'),
+            supabase.from('loans').select('*', { count: 'exact', head: true }).eq('status', 'pending'),
 
             // 2. Verified (Approval Queue)
-            supabase.from('loans').select('*', { count: 'exact', head: true }).eq('status', 'verified'),
+            supabase.from('loans').select('*', { count: 'exact', head: true }).eq('status', 'under_review'),
 
             // 3. Approved (Success)
             supabase.from('loans').select('*', { count: 'exact', head: true }).eq('status', 'approved'),

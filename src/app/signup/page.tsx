@@ -8,6 +8,7 @@ import { CreditCard, Eye, EyeOff } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { supabase } from "@/lib/supabase"
 import { signupSchema, type SignupFormData } from "@/lib/validation"
+import { checkEmailExists, createProfile } from "@/app/actions/auth"
 
 export default function SignupPage() {
     const [formData, setFormData] = useState({
@@ -19,23 +20,33 @@ export default function SignupPage() {
     const [showPassword, setShowPassword] = useState(false)
     const [isLoading, setIsLoading] = useState(false)
     const [error, setError] = useState<string | null>(null)
+    const [accountExists, setAccountExists] = useState(false)
     const [errors, setErrors] = useState<Partial<Record<keyof SignupFormData, string>>>({})
     const [emailSent, setEmailSent] = useState(false)
 
     const validate = () => {
-        try {
-            signupSchema.parse(formData)
-            setErrors({})
-            return true
-        } catch (err: any) {
+        console.log('Validating form data:', formData) // DEBUG
+        const result = signupSchema.safeParse(formData)
+
+        console.log('Validation result:', result) // DEBUG
+
+        if (!result.success) {
             const fieldErrors: Partial<Record<keyof SignupFormData, string>> = {}
-            err.errors.forEach((error: any) => {
-                const field = error.path[0] as keyof SignupFormData
-                fieldErrors[field] = error.message
+            result.error.issues.forEach((issue) => {
+                const field = issue.path[0] as keyof SignupFormData
+                console.log('Field error:', field, issue.message) // DEBUG
+                // Keep the first error per field
+                if (!fieldErrors[field]) {
+                    fieldErrors[field] = issue.message
+                }
             })
+            console.log('Setting errors state:', fieldErrors) // DEBUG
             setErrors(fieldErrors)
             return false
         }
+
+        setErrors({})
+        return true
     }
 
     const handleSignup = async (e: React.FormEvent) => {
@@ -45,8 +56,17 @@ export default function SignupPage() {
 
         setIsLoading(true)
         setError(null)
+        setAccountExists(false)
 
         try {
+            // 1. Pre-Check: Does email exist in profiles (or Auth)?
+            const exists = await checkEmailExists(formData.email)
+            if (exists) {
+                setAccountExists(true)
+                throw new Error("This email is already registered.")
+            }
+
+            // 2. Proceed with Signup
             const { data, error: signUpError } = await supabase.auth.signUp({
                 email: formData.email,
                 password: formData.password,
@@ -61,22 +81,10 @@ export default function SignupPage() {
             if (signUpError) throw signUpError
 
             if (data.user) {
-                // Create profile entry
-                const { error: profileError } = await supabase
-                    .from('profiles')
-                    .insert([
-                        {
-                            id: data.user.id,
-                            full_name: formData.fullName,
-                            updated_at: new Date(),
-                        }
-                    ])
-
-                if (profileError) {
-                    console.error("Error creating profile:", profileError)
-                }
-                if (profileError) {
-                    console.error("Error creating profile:", profileError)
+                // 3. Create profile entry using Server Action (Bypassing Client RLS)
+                const res = await createProfile(data.user.id, formData.fullName, formData.email)
+                if (!res.success) {
+                    console.error("Profile creation failed (non-blocking):", res.error)
                 }
             }
 
@@ -89,7 +97,10 @@ export default function SignupPage() {
 
             setEmailSent(true)
         } catch (err: any) {
-            setError(err.message)
+            // Only set general error if it's NOT the account exists one (handled by UI state)
+            if (err.message !== "This email is already registered.") {
+                setError(err.message)
+            }
         } finally {
             setIsLoading(false)
         }
@@ -140,9 +151,22 @@ export default function SignupPage() {
                     </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                    <form onSubmit={handleSignup} className="space-y-4">
+                    <form onSubmit={handleSignup} className="space-y-4" noValidate>
+                        {/* Account Exists Warning */}
+                        {accountExists && (
+                            <div className="p-4 text-sm text-amber-800 bg-amber-50 rounded-md border border-amber-200 animate-in fade-in slide-in-from-top-2">
+                                <p className="font-semibold mb-1">Account already exists</p>
+                                <p className="mb-2">It looks like you already have an account with this email.</p>
+                                <Link href="/forgot-password">
+                                    <Button variant="outline" size="sm" className="w-full bg-white hover:bg-amber-100 text-amber-900 border-amber-300">
+                                        Reset Password
+                                    </Button>
+                                </Link>
+                            </div>
+                        )}
+
                         {error && (
-                            <div className="p-3 text-sm text-red-500 bg-red-50 rounded-md">
+                            <div className="p-3 text-sm text-red-500 bg-red-50 rounded-md animate-in fade-in">
                                 {error}
                             </div>
                         )}
@@ -155,11 +179,11 @@ export default function SignupPage() {
                                 id="fullName"
                                 value={formData.fullName}
                                 onChange={(e) => setFormData({ ...formData, fullName: e.target.value })}
-                                className={`flex h-10 w-full rounded-md border ${errors.fullName ? 'border-red-500' : 'border-input'} bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+                                className={`flex h-10 w-full rounded-md border ${errors.fullName ? 'border-red-500 ring-1 ring-red-500' : 'border-input'} bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
                                 placeholder="John Doe"
                                 disabled={isLoading}
                             />
-                            {errors.fullName && <p className="text-xs text-red-500">{errors.fullName}</p>}
+                            {errors.fullName && <p className="text-xs text-red-500 font-medium">{errors.fullName}</p>}
                         </div>
                         <div className="space-y-2">
                             <label htmlFor="email" className="text-sm font-medium leading-none">
@@ -169,12 +193,15 @@ export default function SignupPage() {
                                 type="email"
                                 id="email"
                                 value={formData.email}
-                                onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-                                className={`flex h-10 w-full rounded-md border ${errors.email ? 'border-red-500' : 'border-input'} bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+                                onChange={(e) => {
+                                    setFormData({ ...formData, email: e.target.value })
+                                    setAccountExists(false) // Clear warning on edit
+                                }}
+                                className={`flex h-10 w-full rounded-md border ${errors.email ? 'border-red-500 ring-1 ring-red-500' : 'border-input'} bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
                                 placeholder="name@example.com"
                                 disabled={isLoading}
                             />
-                            {errors.email && <p className="text-xs text-red-500">{errors.email}</p>}
+                            {errors.email && <p className="text-xs text-red-500 font-medium">{errors.email}</p>}
                         </div>
                         <div className="space-y-2">
                             <label htmlFor="password" className="text-sm font-medium leading-none">
@@ -186,7 +213,7 @@ export default function SignupPage() {
                                     id="password"
                                     value={formData.password}
                                     onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-                                    className={`flex h-10 w-full rounded-md border ${errors.password ? 'border-red-500' : 'border-input'} bg-background px-3 py-2 text-sm pr-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+                                    className={`flex h-10 w-full rounded-md border ${errors.password ? 'border-red-500 ring-1 ring-red-500' : 'border-input'} bg-background px-3 py-2 text-sm pr-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
                                     disabled={isLoading}
                                 />
                                 <button
@@ -197,10 +224,11 @@ export default function SignupPage() {
                                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                 </button>
                             </div>
-                            {errors.password && <p className="text-xs text-red-500">{errors.password}</p>}
-                            <p className="text-xs text-muted-foreground">
-                                Min 8 characters, 1 uppercase, 1 lowercase, 1 number
-                            </p>
+                            {errors.password && (
+                                <p className="text-xs text-red-500 mt-1 font-medium animate-in fade-in">
+                                    {errors.password}
+                                </p>
+                            )}
                         </div>
                         <div className="space-y-2">
                             <label htmlFor="confirmPassword" className="text-sm font-medium leading-none">
@@ -212,7 +240,7 @@ export default function SignupPage() {
                                     id="confirmPassword"
                                     value={formData.confirmPassword}
                                     onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-                                    className={`flex h-10 w-full rounded-md border ${errors.confirmPassword ? 'border-red-500' : 'border-input'} bg-background px-3 py-2 text-sm pr-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+                                    className={`flex h-10 w-full rounded-md border ${errors.confirmPassword ? 'border-red-500 ring-1 ring-red-500' : 'border-input'} bg-background px-3 py-2 text-sm pr-10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
                                     disabled={isLoading}
                                 />
                                 <button
@@ -223,11 +251,11 @@ export default function SignupPage() {
                                     {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                                 </button>
                             </div>
-                            {errors.confirmPassword && <p className="text-xs text-red-500">{errors.confirmPassword}</p>}
+                            {errors.confirmPassword && <p className="text-xs text-red-500 font-medium">{errors.confirmPassword}</p>}
                         </div>
                         <Button className="w-full" size="lg" disabled={isLoading}>
                             {isLoading && <Spinner className="mr-2" size="sm" />}
-                            Sign Up
+                            {accountExists ? 'Recover Account' : 'Sign Up'}
                         </Button>
                     </form>
                 </CardContent>

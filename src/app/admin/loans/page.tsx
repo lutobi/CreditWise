@@ -26,6 +26,13 @@ type ActiveLoan = {
     payment_status: 'unpaid' | 'partial' | 'paid'
     created_at: string
     completed_at?: string
+    // Banking Details
+    bank_name?: string
+    account_number?: string
+    branch_code?: string
+    account_holder?: string
+    account_type?: string
+    loan_ref?: string
 }
 
 type Summary = {
@@ -135,6 +142,42 @@ export default function ActiveLoansPage() {
         }
     }
 
+    const handleBatchExport = () => {
+        const exportable = activeLoans; // Uses currently filtered active loans
+
+        if (exportable.length === 0) {
+            alert('No active loans to export.');
+            return;
+        }
+
+        const headers = ['Reference', 'Amount', 'Account Holder', 'Bank Name', 'Account Number', 'Branch Code', 'Collection Date'];
+
+        const rows = exportable.map(l => [
+            l.loan_ref || l.id,
+            l.monthly_payment.toFixed(2), // Default to monthly installment
+            `"${l.account_holder || l.customer_name}"`,
+            l.bank_name || 'N/A',
+            `"${l.account_number || 'N/A'}"`,
+            l.branch_code || 'N/A',
+            new Date().toISOString().split('T')[0] // Today
+        ]);
+
+        const csvContent = [
+            headers.join(','),
+            ...rows.map(r => r.join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `debit_batch_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
     if (loading) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin" /></div>
 
     return (
@@ -146,9 +189,15 @@ export default function ActiveLoansPage() {
                         <h1 className="text-3xl font-bold tracking-tight text-purple-900">Active Loans</h1>
                         <p className="text-slate-600">Manage disbursed loans and record payments</p>
                     </div>
-                    <Button variant="outline" onClick={() => router.push('/admin')}>
-                        ← Back to Dashboard
-                    </Button>
+                    <div className="flex gap-3">
+                        <Button variant="outline" onClick={() => router.push('/admin')}>
+                            ← Back to Dashboard
+                        </Button>
+                        <Button className="bg-green-600 hover:bg-green-700" onClick={handleBatchExport}>
+                            <DollarSign className="w-4 h-4 mr-2" />
+                            Download Debit Batch
+                        </Button>
+                    </div>
                 </div>
 
                 {/* Summary Cards */}
