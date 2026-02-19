@@ -1,9 +1,14 @@
 
+import { NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { NextResponse } from 'next/server'
+import { requireAdmin } from '@/lib/require-admin'
 
 export async function GET(request: Request) {
+    // AUTH CHECK
+    const auth = await requireAdmin(request);
+    if (auth instanceof NextResponse) return auth;
+
     const { searchParams } = new URL(request.url)
     const query = searchParams.get('q')
 
@@ -21,12 +26,6 @@ export async function GET(request: Request) {
             }
         }
     )
-
-    // Check Admin Access
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user || !['admin', 'admin_verifier', 'admin_approver'].includes(user.app_metadata?.role || '')) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
 
     try {
         // Search Profiles (Name, ID, Phone)

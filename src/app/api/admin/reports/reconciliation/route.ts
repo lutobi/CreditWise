@@ -1,57 +1,13 @@
 
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { requireAdmin } from '@/lib/require-admin'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
-    const cookieStore = await cookies()
-
-    const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            cookies: {
-                getAll() {
-                    return cookieStore.getAll()
-                },
-            },
-        }
-    )
-
-    // 1. Robust Auth Check (Headers + Cookies)
-    let user = null;
-    let role = '';
-
-    // A. Keep existing cookie check
-    const { data: { session: cookieSession } } = await supabase.auth.getSession();
-
-    if (cookieSession) {
-        user = cookieSession.user;
-        role = user.app_metadata?.role || '';
-    }
-
-    // B. Fallback to Header Check
-    if (!user) {
-        const authHeader = request.headers.get('Authorization');
-        if (authHeader) {
-            const token = authHeader.replace('Bearer ', '');
-            // We need a client that can verify the token. 
-            // The 'supabase' client above is capable if we set the session, 
-            // but easier to just getUser(token) using the anon client.
-            const { data: { user: headerUser } } = await supabase.auth.getUser(token);
-            if (headerUser) {
-                user = headerUser;
-                role = headerUser.app_metadata?.role || '';
-            }
-        }
-    }
-
-    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    if (role !== 'admin' && role !== 'admin_verifier' && role !== 'admin_approver') {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
-    }
+    // AUTH CHECK
+    const auth = await requireAdmin(request);
+    if (auth instanceof NextResponse) return auth;
 
     // 2. Aggregate Data (Use Service Role for Reliability)
     // adminDb prevents RLS issues on aggregate queries
@@ -106,6 +62,27 @@ export async function GET(request: Request) {
 
         const todayDisbursed = todayData?.reduce((sum, loan) => sum + loan.amount, 0) || 0
 
+        // Rejection Stats
+        const { data: rejectedData } = await adminDb
+            .from('loans')
+            .select('application_data')
+            .eq('status', 'rejected');
+
+        const countRejected = rejectedData?.length || 0;
+        const totalDecided = countDisbursed + countRejected;
+        const rejectionRate = totalDecided > 0 ? (countRejected / totalDecided) * 100 : 0;
+
+        // Top Reasons
+        const reasonsMap: Record<string, number> = {};
+        rejectedData?.forEach((l: any) => {
+            const r = l.application_data?.rejection_reason || 'Other';
+            reasonsMap[r] = (reasonsMap[r] || 0) + 1;
+        });
+        const topReasons = Object.entries(reasonsMap)
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, 3)
+            .map(([reason, count]) => ({ reason, count }));
+
         // Fetch Budget Limit
         let totalLimit = 4500000;
         try {
@@ -135,7 +112,9 @@ export async function GET(request: Request) {
                 todayDisbursed,
                 projectedInterest: totalDisbursed * 0.25, // Standard 25% for Payday
                 totalLimit,
-                repaymentRate // Dynamic Rate
+                repaymentRate, // Dynamic Rate
+                rejectionRate,
+                topReasons
             }
         })
 

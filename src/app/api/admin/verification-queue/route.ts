@@ -1,9 +1,14 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireAdmin } from '@/lib/require-admin';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+    // AUTH CHECK
+    const auth = await requireAdmin(request);
+    if (auth instanceof NextResponse) return auth;
+
     try {
         // 1. Service Role Client (Bypasses ALL RLS)
         const supabase = createClient(
@@ -16,6 +21,7 @@ export async function GET(request: Request) {
             .from('loans')
             .select('*, profiles!inner(full_name, national_id, phone_number)')
             .eq('status', 'pending');
+        // .neq('application_data->>status_detail', 'video_verified'); // REMOVED: potentially incorrect with NULLs
 
         if (loanError) throw loanError;
 
@@ -23,15 +29,23 @@ export async function GET(request: Request) {
             return NextResponse.json({ success: true, data: [] });
         }
 
+        // Filter in memory to safely handle missing/null keys
+        // We want to SHOW loans that are NOT 'video_verified'
+        const filteredLoans = loans.filter(l => l.application_data?.status_detail !== 'video_verified');
+
+        if (filteredLoans.length === 0) {
+            return NextResponse.json({ success: true, data: [] });
+        }
+
         // 3. Fetch Verifications
-        const userIds = loans.map(l => l.user_id);
+        const userIds = filteredLoans.map(l => l.user_id);
         const { data: verifs } = await supabase
             .from('verifications')
             .select('*')
             .in('user_id', userIds);
 
         // 4. Map & Sign URLs
-        const itemsPromise = loans.map(async (l) => {
+        const itemsPromise = filteredLoans.map(async (l) => {
             const v = verifs?.find(ver => ver.user_id === l.user_id);
             const appData = l.application_data || {};
 

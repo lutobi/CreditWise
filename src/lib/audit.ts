@@ -15,6 +15,15 @@ type AuditAction =
     | 'LOAN_PAID'
     | 'SYSTEM_ERROR'
     | 'HR_VERIFICATION_EMAIL_SENT'
+    | 'LOAN_SUBMITTED'
+    | 'ADMIN_ACCESS'
+    | 'LOGIN_SUCCESS'
+    | 'LOGIN_FAILURE'
+    | 'DATA_EXPORT'
+    | 'MANDATE_CREATED'
+    | 'PAYOUT_INITIATED'
+    | 'CSRF_FAILURE'
+    | 'RATE_LIMIT_EXCEEDED'
 
 export async function logAudit(loanId: string, action: AuditAction, details: any = {}, actorId?: string) {
     try {

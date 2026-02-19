@@ -13,6 +13,23 @@ export async function sendHRVerificationEmail(
         return { success: false, error: "Missing RESEND_API_KEY" };
     }
 
+    // Validate HR email to prevent injection attacks
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(hrEmail)) {
+        return { success: false, error: "Invalid HR email address" };
+    }
+
+    // Block free/personal email providers — HR should use corporate domains
+    const blockedDomains = [
+        'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
+        'aol.com', 'icloud.com', 'mail.com', 'protonmail.com',
+        'yandex.com', 'zoho.com', 'gmx.com', 'live.com',
+    ];
+    const domain = hrEmail.split('@')[1]?.toLowerCase();
+    if (blockedDomains.includes(domain)) {
+        return { success: false, error: "Please provide a corporate HR email address, not a personal email" };
+    }
+
     try {
         const resend = new Resend(process.env.RESEND_API_KEY);
 

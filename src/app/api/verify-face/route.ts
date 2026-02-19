@@ -1,7 +1,11 @@
 
 import { RekognitionClient, CompareFacesCommand } from "@aws-sdk/client-rekognition";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { createClient } from '@supabase/supabase-js'
+import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit';
+import { logger } from '@/lib/safe-logger';
+import { requireAdmin } from '@/lib/require-admin';
+import { faceVerificationSchema } from '@/lib/validation';
 
 const rekognition = new RekognitionClient({
     region: process.env.AWS_REGION || "us-east-1",
@@ -11,42 +15,61 @@ const rekognition = new RekognitionClient({
     },
 });
 
-export async function POST(req: Request) {
+export async function POST(req: NextRequest) {
     try {
-        // 1. Parse Body Once
-        const { idUrl, selfieUrl, userId } = await req.json();
+        // 0. Admin Auth Check (replaces CSRF — admin UI doesn't send CSRF tokens)
+        const auth = await requireAdmin(req);
+        if (auth instanceof NextResponse) return auth;
 
-        if (!idUrl || !selfieUrl) {
+        // Rate Limiting (protects AWS costs)
+        const ip = getClientIp(req.headers);
+        const rateLimit = checkRateLimit(`verify-face:${ip}`, RATE_LIMITS.VERIFICATION);
+        if (!rateLimit.success) {
             return NextResponse.json(
-                { error: "Both ID and Selfie URLs are required" },
-                { status: 400 }
+                { error: "Too many verification attempts. Please try again later." },
+                { status: 429, headers: { 'Retry-After': String(Math.ceil((rateLimit.reset - Date.now()) / 1000)) } }
             );
         }
 
+        // 1. Zod Validation
+        const rawBody = await req.json();
+        const validation = faceVerificationSchema.safeParse(rawBody);
+
+        if (!validation.success) {
+            logger.warn('Face verification validation failed', { issues: validation.error.issues });
+            return NextResponse.json({
+                error: "Invalid request data",
+                details: validation.error.issues
+            }, { status: 400 });
+        }
+
+        const { idUrl, selfieUrl, userId } = validation.data;
+
         if (!process.env.AWS_ACCESS_KEY_ID || !process.env.AWS_SECRET_ACCESS_KEY) {
-            console.error("AWS Credentials missing");
+            logger.error("AWS Credentials missing");
             return NextResponse.json({ error: "Server configuration error" }, { status: 500 });
         }
 
+
         // Helper to fetch image bytes
         const fetchImage = async (url: string, label: string) => {
-            console.log(`[${label}] Fetching: ${url.substring(0, 50)}...`);
+            logger.debug(`Fetching image`, { label, url });
             try {
                 const res = await fetch(url);
                 if (!res.ok) {
-                    console.error(`[${label}] Fetch Failed! Status: ${res.status} ${res.statusText}`);
+                    logger.error(`Fetch Failed`, { label, status: res.status, statusText: res.statusText });
                     throw new Error(`Failed to fetch ${label}: ${res.status} ${res.statusText}`);
                 }
                 const buf = await res.arrayBuffer();
-                console.log(`[${label}] Fetched ${buf.byteLength} bytes.`);
+                logger.debug(`Fetched image bytes`, { label, byteLength: buf.byteLength });
                 return Buffer.from(buf);
             } catch (e: any) {
-                console.error(`[${label}] Network Error:`, e.message);
+                logger.error(`Network Error`, { label, error: e.message });
                 throw e;
             }
         };
 
-        console.log("Fetching images for verification...");
+        logger.info("Starting face verification", { userId });
         const [sourceImage, targetImage] = await Promise.all([
             fetchImage(idUrl, "ID_DOC"),       // Source = ID Card
             fetchImage(selfieUrl, "SELFIE"),   // Target = Selfie
@@ -65,7 +88,7 @@ export async function POST(req: Request) {
         let failureReason = "";
 
         try {
-            console.log("Sending to AWS Rekognition...");
+            logger.debug("Sending to AWS Rekognition");
             const response = await rekognition.send(command);
 
             const faceMatches = response.FaceMatches || [];
@@ -73,7 +96,7 @@ export async function POST(req: Request) {
             isMatch = similarity >= 85;
             details = faceMatches;
         } catch (awsError: any) {
-            console.error("AWS Rekognition Error:", awsError.name, awsError.message);
+            logger.error("AWS Rekognition Error", { error: awsError.message, name: awsError.name });
             verificationFailed = true;
             failureReason = awsError.message || "AWS Check Failed";
 
@@ -104,8 +127,8 @@ export async function POST(req: Request) {
                 })
                 .eq('user_id', userId);
 
-            if (error) console.error("Failed to save confidence score:", error);
-            else console.log(`Saved confidence ${finalConfidence} to user ${userId}`);
+            if (error) logger.error("Failed to save confidence score", { error, userId });
+            else logger.info("Saved verification result", { confidence: finalConfidence, userId });
         }
 
         if (verificationFailed) {
@@ -114,7 +137,7 @@ export async function POST(req: Request) {
                 error: failureReason,
                 isMatch: false,
                 similarity: 0
-            }, { status: 400 }); // Return 400 so frontend knows it failed but result is saved
+            }, { status: 400 });
         }
 
         return NextResponse.json({
@@ -125,9 +148,9 @@ export async function POST(req: Request) {
         });
 
     } catch (error: any) {
-        console.error("🔥 FATAL VERIFICATION ERROR:", error);
+        logger.error("FATAL VERIFICATION ERROR", { error: error.message });
         return NextResponse.json(
-            { error: "Verification failed", details: error.message },
+            { error: "Verification failed" },
             { status: 500 }
         );
     }

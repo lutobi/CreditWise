@@ -62,6 +62,12 @@ export default function LoginPage() {
             }
 
             if (data.user) {
+                // Log audit for success
+                fetch('/api/auth/audit', {
+                    method: 'POST',
+                    body: JSON.stringify({ action: 'LOGIN_SUCCESS', details: { email: formData.email } })
+                }).catch(() => { }); // Fire and forget
+
                 // Check if user is admin
                 if (data.user.app_metadata?.role === 'admin') {
                     router.push("/admin")
@@ -72,6 +78,11 @@ export default function LoginPage() {
             }
         } catch (err: any) {
             setError(err.message)
+            // Log audit for failure (Note: This might fail if session is not established, but good to try)
+            fetch('/api/auth/audit', {
+                method: 'POST',
+                body: JSON.stringify({ action: 'LOGIN_FAILURE', details: { email: formData.email, error: err.message } })
+            }).catch(() => { });
         } finally {
             setIsLoading(false)
         }

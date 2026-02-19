@@ -1,11 +1,16 @@
 
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireAdmin } from '@/lib/require-admin';
 
 // No caching - real time
 export const dynamic = 'force-dynamic';
 
 export async function GET(request: Request) {
+    // AUTH CHECK
+    const auth = await requireAdmin(request);
+    if (auth instanceof NextResponse) return auth;
+
     // 1. Service Role Client (Bypass RLS for system stats)
     const supabase = createClient(
         process.env.NEXT_PUBLIC_SUPABASE_URL!,

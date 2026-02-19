@@ -1,6 +1,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
+import { requireAdmin } from '@/lib/require-admin'
 
 // Use Service Role for Admin Management
 const supabaseAdmin = createClient(
@@ -9,6 +10,10 @@ const supabaseAdmin = createClient(
 )
 
 export async function GET(request: Request) {
+    // AUTH CHECK
+    const auth = await requireAdmin(request);
+    if (auth instanceof NextResponse) return auth;
+
     // List all users and filter by role in app_metadata
     // Note: listUsers is paginated. For now we fetch first 50.
     try {
@@ -34,6 +39,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+    // AUTH CHECK
+    const auth = await requireAdmin(request);
+    if (auth instanceof NextResponse) return auth;
+
     try {
         const { email, role } = await request.json()
 

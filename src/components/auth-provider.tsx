@@ -25,17 +25,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         let mounted = true;
 
         const checkMockUser = () => {
-            if (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') {
+            // SECURITY: Require BOTH development mode AND explicit flag to enable mock auth
+            const allowMockAuth = process.env.NEXT_PUBLIC_ALLOW_MOCK_AUTH === 'true';
+            const isDev = process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test';
+
+            if (isDev && allowMockAuth) {
                 const mockUserJson = typeof window !== 'undefined' ? localStorage.getItem('nomad_mock_user') : null
                 if (mockUserJson) {
-                    const mockUser = JSON.parse(mockUserJson)
-                    if (mounted) {
-                        // Avoid loop: Only update if not already set or ID differs
-                        setUser(prev => prev?.id === mockUser.id ? prev : mockUser)
-                        setSession(prev => prev?.user?.id === mockUser.id ? prev : { user: mockUser, access_token: 'mock-token', token_type: 'bearer' } as Session)
-                        setIsLoading(false)
+                    try {
+                        const mockUser = JSON.parse(mockUserJson)
+                        // Validate mock user has required fields
+                        if (mockUser?.id && mockUser?.email) {
+                            if (mounted) {
+                                // Avoid loop: Only update if not already set or ID differs
+                                setUser(prev => prev?.id === mockUser.id ? prev : mockUser)
+                                setSession(prev => prev?.user?.id === mockUser.id ? prev : { user: mockUser, access_token: 'mock-token', token_type: 'bearer' } as Session)
+                                setIsLoading(false)
+                            }
+                            return true; // Mock user found
+                        }
+                    } catch (e) {
+                        console.error('[Auth] Invalid mock user JSON:', e);
                     }
-                    return true; // Mock user found
                 }
             }
             return false;

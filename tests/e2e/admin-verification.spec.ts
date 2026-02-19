@@ -141,8 +141,8 @@ test.describe('Admin Verification Flow', () => {
         const url1 = await page.evaluate(() => (window as any)._openedUrl);
         expect(url1).toBe('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
 
-        // Test B: Click "View Bank St." Button
-        await page.getByRole('button', { name: 'View Bank St.' }).click();
+        // Test B: Click "View 3-Month St." Button
+        await page.getByRole('button', { name: 'View 3-Month St.' }).click();
         const url2 = await page.evaluate(() => (window as any)._openedUrl);
         expect(url2).toBe('data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==');
 

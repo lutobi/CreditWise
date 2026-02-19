@@ -60,7 +60,7 @@ export async function PUT(request: Request) {
     } catch (error: any) {
         console.error("Profile Update Error:", error)
         if (error instanceof z.ZodError) {
-            return NextResponse.json({ error: (error as z.ZodError).errors[0].message }, { status: 400 })
+            return NextResponse.json({ error: error.issues[0].message }, { status: 400 })
         }
         return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 })
     }

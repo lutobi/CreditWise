@@ -1,8 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { checkRateLimit, getClientIp, RATE_LIMITS } from '@/lib/rate-limit'
+import { logger } from '@/lib/safe-logger'
+import { validateCSRF } from '@/lib/csrf'
+import {
+    personalDetailsSchema,
+    employmentDetailsSchema,
+    bankingDetailsSchema,
+    loanDetailsSchema,
+    referencesSchema,
+    declarationSchema
+} from '@/lib/validation'
 
 export async function POST(req: NextRequest) {
     try {
+        // 0. CSRF Protection
+        const csrf = await validateCSRF(req);
+        if (!csrf.valid) {
+            return NextResponse.json({ success: false, error: csrf.error }, { status: 403 });
+        }
+
         const supabase = createClient(
             process.env.NEXT_PUBLIC_SUPABASE_URL!,
             process.env.SUPABASE_SERVICE_ROLE_KEY!
@@ -20,7 +37,39 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ success: false, error: 'Unauthorized: Invalid Token' }, { status: 401 })
         }
 
+        // 1.5 Rate Limiting (per user, 5 submissions per day)
+        const rateLimitKey = `loan-submit:${user.id}`;
+        const rateLimit = checkRateLimit(rateLimitKey, RATE_LIMITS.LOAN_SUBMIT);
+        if (!rateLimit.success) {
+            return NextResponse.json(
+                { success: false, error: 'You have submitted too many applications today. Please try again tomorrow.' },
+                { status: 429 }
+            );
+        }
+
         const formData = await req.json()
+
+        // 1.7 Zod Validation
+        try {
+            personalDetailsSchema.parse(formData);
+            employmentDetailsSchema.parse(formData);
+            bankingDetailsSchema.parse(formData);
+            loanDetailsSchema.parse(formData);
+            referencesSchema.parse(formData);
+            // declarationSchema uses declarationDate and signatureName fields
+            declarationSchema.parse({
+                termsAccepted: formData.readTerms && formData.confirmTruth && formData.understandLegal && formData.consentAffordability && formData.consentVerification,
+                signatureName: formData.signatureName,
+                declarationDate: formData.declarationDate || new Date().toISOString()
+            });
+        } catch (validationError: any) {
+            logger.warn('Loan submission validation failed', { error: validationError.errors });
+            return NextResponse.json({
+                success: false,
+                error: 'Invalid application data',
+                details: validationError.errors
+            }, { status: 400 });
+        }
 
         // 2. Capture Metadata (IP & User Agent)
         const ip = req.headers.get('x-forwarded-for') || req.headers.get('remote-addr') || 'unknown;';
@@ -35,7 +84,30 @@ export async function POST(req: NextRequest) {
             signature_name: formData.signatureName || 'Electronic Signature',
             consent_granted: true
         };
+        // 2.5 Risk Assessment (Identity Consistency)
+        const { data: history } = await supabase
+            .from('loans')
+            .select('application_data')
+            .eq('user_id', user.id)
+            .in('status', ['completed', 'approved'])
+            .order('created_at', { ascending: false })
+            .limit(1);
 
+        const riskFlags: string[] = [];
+        if (history && history.length > 0) {
+            const prev = typeof history[0].application_data === 'string'
+                ? JSON.parse(history[0].application_data)
+                : history[0].application_data;
+
+            if (prev) {
+                if (prev.nationalId && formData.nationalId && prev.nationalId.trim() !== formData.nationalId.trim()) {
+                    riskFlags.push(`National ID Changed (Was: ${prev.nationalId})`);
+                }
+                if (prev.dob && formData.dob && prev.dob !== formData.dob) {
+                    riskFlags.push(`DOB Changed (Was: ${prev.dob})`);
+                }
+            }
+        }
         // 3. Upsert Profile
         const { error: profileError } = await supabase.from('profiles').upsert({
             id: user.id,
@@ -68,6 +140,7 @@ export async function POST(req: NextRequest) {
         const applicationData = {
             ...formData,
             refId,
+            risk_flags: riskFlags,
             submission_metadata: submissionMetadata
         };
 
@@ -107,15 +180,23 @@ export async function POST(req: NextRequest) {
                 applicantEmail: user.email || 'no-email'
             });
 
-        } catch (notifyError) {
-            console.error('Notification failed:', notifyError);
+        } catch (notifyError: any) {
+            logger.warn('Notification failed', { error: notifyError?.message });
             // Don't fail the request, just log
+        }
+
+        // 7. Audit Log
+        try {
+            const { logAudit } = await import('@/lib/audit');
+            await logAudit(loan.id, 'LOAN_SUBMITTED', { amount, refId }, user.id);
+        } catch (e: any) {
+            logger.warn('Audit log failed', { error: e?.message });
         }
 
         return NextResponse.json({ success: true, loanId: loan.id, refId });
 
     } catch (error: any) {
-        console.error('Submit API Error:', error)
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+        logger.error('Loan submit failed', { error: error?.message });
+        return NextResponse.json({ success: false, error: 'Submission failed. Please try again.' }, { status: 500 })
     }
 }

@@ -1,44 +1,13 @@
-import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { requireAdmin } from '@/lib/require-admin'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
-    const cookieStore = await cookies()
-
-    const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            cookies: {
-                getAll() {
-                    return cookieStore.getAll()
-                },
-                setAll(cookiesToSet) {
-                    try {
-                        cookiesToSet.forEach(({ name, value, options }) =>
-                            cookieStore.set(name, value, options)
-                        )
-                    } catch {
-                        // The `setAll` method was called from a Server Component.
-                        // This can be ignored if you have middleware refreshing
-                        // user sessions.
-                    }
-                },
-            },
-        }
-    )
-
-    // 1. Check Auth (Admin Only)
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const role = session.user.app_metadata?.role
-    if (role !== 'admin' && role !== 'admin_verifier' && role !== 'admin_approver') {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    // AUTH CHECK
+    const auth = await requireAdmin(request);
+    if (auth instanceof NextResponse) return auth;
 
     try {
         const { searchParams } = new URL(request.url)
@@ -65,15 +34,18 @@ export async function GET(request: Request) {
                 application_data,
                 profiles:user_id (
                     full_name,
-                    national_id,
-                    email,
-                    phone
+                    national_id
                 )
             `)
             .order('created_at', { ascending: false })
 
         if (startDate) query = query.gte('created_at', startDate)
-        if (endDate) query = query.lte('created_at', endDate)
+        if (endDate) {
+            // Ensure we cover the entire end day (until 23:59:59)
+            // If it's just a date string (YYYY-MM-DD), append time.
+            const endQuery = endDate.includes('T') ? endDate : `${endDate}T23:59:59.999Z`;
+            query = query.lte('created_at', endQuery)
+        }
         if (status && status !== 'all') query = query.eq('status', status)
 
         const { data: loans, error } = await query

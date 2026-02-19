@@ -21,6 +21,8 @@ type ReportStats = {
     projectedInterest: number
     totalLimit: number
     repaymentRate?: number
+    rejectionRate?: number
+    topReasons?: { reason: string, count: number }[]
 }
 
 // Mock Data (Fallback)
@@ -129,9 +131,18 @@ export default function ReportsPage() {
         setDownloading(true);
         try {
             const query = new URLSearchParams({ startDate, endDate }).toString();
-            const res = await fetch(`/api/admin/reports/loan-book?${query}`);
 
-            if (!res.ok) throw new Error("Download failed");
+            const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+            if (session?.access_token) {
+                headers['Authorization'] = `Bearer ${session.access_token}`;
+            }
+
+            const res = await fetch(`/api/admin/reports/loan-book?${query}`, { headers }); // Added headers
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({ error: res.statusText }));
+                throw new Error(err.error || "Download failed");
+            }
 
             // Convert to Blob and Trigger Download
             const blob = await res.blob();
@@ -142,8 +153,9 @@ export default function ReportsPage() {
             document.body.appendChild(a);
             a.click();
             a.remove();
-        } catch (e) {
-            alert("Error downloading report.");
+        } catch (e: any) {
+            console.error(e);
+            alert(`Error downloading report: ${e.message}`); // Show proper error
         } finally {
             setDownloading(false);
         }
@@ -198,6 +210,23 @@ export default function ReportsPage() {
 
                         {/* Top Row: Key Performance Rings & Totals */}
                         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                            <Card className="bg-gradient-to-br from-green-50 to-white border-green-100">
+                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                                    <CardTitle className="text-sm font-medium text-slate-600">Est. Revenue</CardTitle>
+                                    <div className="p-2 bg-green-100 rounded-full">
+                                        <TrendingUp className="h-4 w-4 text-green-600" />
+                                    </div>
+                                </CardHeader>
+                                <CardContent>
+                                    <div className="text-2xl font-bold text-green-700">
+                                        {loading ? <span className="text-green-700/50 animate-pulse">---</span> : `N$ ${activeStats?.projectedInterest.toLocaleString()}`}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                        Projected Interest
+                                    </p>
+                                </CardContent>
+                            </Card>
+
                             {/* Visual Ring: Budget Utilization */}
                             <Card className="flex flex-col items-center justify-center p-6 bg-white shadow-sm border-slate-200">
                                 <div style={{ width: 140, height: 170 }}>
@@ -220,38 +249,14 @@ export default function ReportsPage() {
                                 />
                             </Card>
 
-                            <Card className="bg-gradient-to-br from-blue-50 to-white border-blue-100">
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium text-slate-600">Total Disbursed</CardTitle>
-                                    <div className="p-2 bg-blue-100 rounded-full">
-                                        <DollarSign className="h-4 w-4 text-blue-600" />
-                                    </div>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold text-slate-900">
-                                        {loading ? <span className="text-slate-400 animate-pulse">---</span> : `N$ ${activeStats?.totalDisbursed.toLocaleString()}`}
-                                    </div>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        {loading ? "Fetching records..." : `Across ${activeStats?.countDisbursed} Loans`}
-                                    </p>
-                                </CardContent>
-                            </Card>
-
-                            <Card className="bg-gradient-to-br from-green-50 to-white border-green-100">
-                                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium text-slate-600">Est. Revenue</CardTitle>
-                                    <div className="p-2 bg-green-100 rounded-full">
-                                        <TrendingUp className="h-4 w-4 text-green-600" />
-                                    </div>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="text-2xl font-bold text-green-700">
-                                        {loading ? <span className="text-green-700/50 animate-pulse">---</span> : `N$ ${activeStats?.projectedInterest.toLocaleString()}`}
-                                    </div>
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                        Projected Interest
-                                    </p>
-                                </CardContent>
+                            {/* Visual Ring: Rejection Rate */}
+                            <Card className="flex flex-col items-center justify-center p-6 bg-white shadow-sm border-slate-200">
+                                <CircularProgress
+                                    value={loading ? 0 : (activeStats?.rejectionRate || 0)}
+                                    label="Rejection Rate"
+                                    color="text-red-600"
+                                    subLabel={loading ? "Analyzing..." : `${(activeStats?.rejectionRate || 0).toFixed(1)}% Declined`}
+                                />
                             </Card>
                         </div>
 
@@ -344,15 +349,23 @@ export default function ReportsPage() {
                                     <p className="text-xs text-muted-foreground">{loading ? "Syncing..." : "Disbursed Today"}</p>
                                 </CardContent>
                             </Card>
-                            <Card className="bg-slate-900 text-white">
+                            <Card className="bg-red-50 border-red-100">
                                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                                    <CardTitle className="text-sm font-medium text-slate-200">System Health</CardTitle>
+                                    <CardTitle className="text-sm font-medium text-red-900">Top Rejection Reasons</CardTitle>
                                 </CardHeader>
                                 <CardContent>
-                                    <div className="text-2xl font-bold">
-                                        {loading ? <span className="text-yellow-400">Checking...</span> : "100%"}
+                                    <div className="space-y-2 mt-2">
+                                        {activeStats?.topReasons && activeStats.topReasons.length > 0 ? (
+                                            activeStats.topReasons.map((r, i) => (
+                                                <div key={i} className="flex justify-between items-center text-xs">
+                                                    <span className="text-red-800 font-medium truncate max-w-[150px]">{r.reason}</span>
+                                                    <span className="bg-white px-2 py-0.5 rounded-full text-red-600 border border-red-200">{r.count}</span>
+                                                </div>
+                                            ))
+                                        ) : (
+                                            <p className="text-xs text-red-400">No rejection data available</p>
+                                        )}
                                     </div>
-                                    <p className="text-xs text-slate-400">{loading ? "Verifying Services" : "All Systems Operational"}</p>
                                 </CardContent>
                             </Card>
                         </div>
@@ -401,6 +414,6 @@ export default function ReportsPage() {
 
             </main>
             <Footer />
-        </div>
+        </div >
     )
 }

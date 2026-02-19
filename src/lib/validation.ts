@@ -111,6 +111,47 @@ export const declarationSchema = z.object({
     declarationDate: z.string().min(1, 'Date is required'),
 })
 
+// Face Verification
+export const faceVerificationSchema = z.object({
+    idUrl: z.string().url('Invalid ID URL'),
+    selfieUrl: z.string().url('Invalid Selfie URL'),
+    userId: z.string().uuid('Invalid User ID'),
+})
+
+// Realpay Mandate
+export const realpayMandateSchema = z.object({
+    loanId: z.string().uuid('Invalid Loan ID'),
+    amount: z.number().positive('Amount must be positive'),
+    collectionDay: z.number().int().min(1).max(28, 'Collection day must be between 1 and 28'),
+    bankCode: z.string().min(2, 'Bank code required'),
+    accountNumber: z.string().min(5, 'Account number required'),
+    accountType: z.enum(['savings', 'current', 'transmission', 'Savings', 'Cheque/Current']).optional(),
+    idNumber: z.string().min(5, 'ID number required'),
+    accountHolderName: z.string().optional(),
+})
+
+// Realpay Payout
+export const realpayPayoutSchema = z.object({
+    loanId: z.string().uuid('Invalid Loan ID'),
+    bankCode: z.string().optional(),
+    accountNumber: z.string().optional(),
+    accountHolderName: z.string().optional(),
+})
+
+// Credit Check
+export const creditCheckSchema = z.object({
+    nationalId: z.string().min(5, 'Valid National ID is required'),
+})
+
+// Documents
+export const documentRequestSchema = z.object({
+    url: z.string().url('Invalid document URL'),
+})
+
+export const contractRequestSchema = z.object({
+    loanId: z.string().uuid('Invalid Loan ID'),
+})
+
 // Type exports
 export type SignupFormData = z.infer<typeof signupSchema>
 export type LoginFormData = z.infer<typeof loginSchema>

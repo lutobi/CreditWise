@@ -1,37 +1,14 @@
 
-import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { logAudit } from '@/lib/audit'
+import { requireAdmin } from '@/lib/require-admin'
 
 export async function POST(request: Request) {
-    const cookieStore = await cookies()
-
-    const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            cookies: {
-                getAll() {
-                    return cookieStore.getAll()
-                },
-            },
-        }
-    )
-
-    // 1. Check Auth (Admin Only)
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-
-    const appRole = session.user.app_metadata?.role
-    const userRole = session.user.user_metadata?.role
-    const role = appRole || userRole
-
-    // Only approvers or super admins should handle money ideally, but let's allow verifiers too for flexibility
-    if (role !== 'admin' && role !== 'admin_verifier' && role !== 'admin_approver') {
-        return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
-    }
+    // AUTH CHECK
+    const auth = await requireAdmin(request);
+    if (auth instanceof NextResponse) return auth;
+    const { session } = auth;
 
     // 2. Service Role Client (For DB Ops)
     const adminDb = createClient(

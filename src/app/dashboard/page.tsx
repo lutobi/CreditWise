@@ -13,6 +13,7 @@ import { formatCurrency } from "@/lib/utils"
 
 import { LiveSelfie } from "@/components/ui/live-selfie"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { PaymentCalendar, PaymentStatusBanner, EarlyRepayment } from "@/components/realpay"
 
 type VerificationData = {
     is_employed: boolean
@@ -34,6 +35,9 @@ type LoanData = {
     total_repayment?: number
     amount_paid?: number
     payment_status?: 'unpaid' | 'partial' | 'paid'
+    // Realpay fields
+    mandate_id?: string
+    collection_day?: number
 }
 
 export default function DashboardPage() {
@@ -202,11 +206,23 @@ export default function DashboardPage() {
         }
     };
 
-    // Active loan is the most recent non-completed and non-paid loan
-    // If all loans are completed or paid, show "Apply Now" to allow re-application
-    const activeLoan = loans.find(l => l.status !== 'completed' && l.payment_status !== 'paid');
+    // Active loan is current approved/pending/under_review loan
+    // EXCLUDE rejected loans from being "active" so they don't block the "Apply" flow logic by default
+    // BUT we need to find if there is a RECENT rejection to block application
+    const activeLoan = loans.find(l => ['pending', 'under_review', 'approved'].includes(l.status) && l.payment_status !== 'paid');
+
+    // Check for recent rejection (last 30 days)
+    const recentRejection = loans.find(l => {
+        if (l.status !== 'rejected') return false;
+        const daysSince = (new Date().getTime() - new Date(l.created_at).getTime()) / (1000 * 3600 * 24);
+        return daysSince < 30;
+    });
+
+    // Check if user has a completed loan to allow re-application
     const hasCompletedLoan = loans.some(l => l.payment_status === 'paid' || l.status === 'completed');
-    const canApplyAgain = !activeLoan && hasCompletedLoan;
+
+    // Can apply if: No Active Loan AND No Recent Rejection
+    const canApplyAgain = !activeLoan && !recentRejection;
 
     // Effect to generate signed URL for preview when retake is submitted
     useEffect(() => {
@@ -277,24 +293,17 @@ export default function DashboardPage() {
             <Navbar />
 
             <main className="flex-1 container mx-auto px-4 py-8 md:px-6 md:py-12">
+                {/* Failed Payment Banner */}
+                {user && <PaymentStatusBanner userId={user.id} />}
+
                 <div className="mb-8">
                     <h1 className="text-3xl font-bold">Dashboard</h1>
                     <p className="text-muted-foreground">Welcome back, {user?.user_metadata?.full_name}</p>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4 mb-8">
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 mb-8">
                     {/* Stats Cards (Unchanged ideally, simplified here for brevity if needed, but keeping original content) */}
-                    <Card>
-                        <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                            <CardTitle className="text-sm font-medium">Total Borrowed</CardTitle>
-                            <CreditCard className="h-4 w-4 text-muted-foreground" />
-                        </CardHeader>
-                        <CardContent>
-                            <div className="text-2xl font-bold">
-                                {formatCurrency(loans.filter(l => ['approved', 'disbursed', 'completed'].includes(l.status) || l.payment_status === 'paid').reduce((acc, loan) => acc + loan.amount, 0))}
-                            </div>
-                        </CardContent>
-                    </Card>
+
                     <Card>
                         <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                             <CardTitle className="text-sm font-medium">Active Loans</CardTitle>
@@ -539,6 +548,18 @@ export default function DashboardPage() {
                                     </div>
                                 )}
 
+                                {/* Realpay Payment Calendar - Show for approved loans */}
+                                {activeLoan.status === 'approved' && activeLoan.payment_status !== 'paid' && (
+                                    <div className="mt-4">
+                                        <PaymentCalendar
+                                            collectionDay={activeLoan.collection_day || 25}
+                                            amount={Math.round((activeLoan.total_repayment || activeLoan.amount) / activeLoan.duration_months)}
+                                            startDate={new Date(activeLoan.created_at).toISOString()}
+                                            endDate={new Date(new Date(activeLoan.created_at).getTime() + activeLoan.duration_months * 30 * 24 * 60 * 60 * 1000).toISOString()}
+                                        />
+                                    </div>
+                                )}
+
                                 {/* Rejection Reason Box */}
                                 {activeLoan.status === 'rejected' && (
                                     <div className="bg-red-50 dark:bg-red-900/10 border border-red-200 dark:border-red-900/50 rounded-md p-3 text-sm text-red-800 dark:text-red-200">
@@ -586,25 +607,55 @@ export default function DashboardPage() {
                             </div>
                         ) : (
                             <div className="flex flex-col gap-4">
-                                {canApplyAgain ? (
-                                    <>
-                                        <div className="bg-green-50 p-4 rounded-lg border border-green-200 text-center">
-                                            <div className="text-2xl font-bold text-green-700 mb-1">🎉 Congratulations!</div>
-                                            <p className="text-sm text-green-600">
-                                                You have successfully repaid your previous loan. You are now eligible to apply for a new loan.
-                                            </p>
+                                {recentRejection ? (
+                                    <div className="bg-white border-2 border-red-600 rounded-lg p-6 shadow-sm">
+                                        <div className="flex items-center gap-3 mb-4">
+                                            <div className="bg-red-100 p-2 rounded-full">
+                                                <AlertCircle className="w-6 h-6 text-red-600" />
+                                            </div>
+                                            <h3 className="text-xl font-bold text-red-700">Application Declined</h3>
                                         </div>
-                                        <Button className="w-full bg-green-600 hover:bg-green-700" onClick={() => router.push('/apply')}>
-                                            Apply for New Loan
-                                        </Button>
-                                    </>
+                                        <div className="space-y-4">
+                                            <p className="font-semibold text-slate-800">
+                                                Unfortunately, your application created on {new Date(recentRejection.created_at).toLocaleDateString()} was not successful.
+                                            </p>
+                                            <div className="bg-red-50 p-4 rounded border-l-4 border-red-500">
+                                                <p className="font-bold text-red-900 text-sm uppercase mb-1">Reason</p>
+                                                <p className="text-red-800 font-medium">
+                                                    {recentRejection.rejection_reason || "Did not meet current lending criteria."}
+                                                </p>
+                                            </div>
+                                            <p className="text-sm text-slate-600">
+                                                You may re-apply after <strong>{new Date(new Date(recentRejection.created_at).getTime() + 30 * 24 * 60 * 60 * 1000).toLocaleDateString()}</strong> (30 days from application).
+                                            </p>
+                                            <Button disabled className="w-full bg-slate-200 text-slate-500 cursor-not-allowed">
+                                                Application Locked
+                                            </Button>
+                                        </div>
+                                    </div>
                                 ) : (
                                     <>
-                                        <div className="text-2xl font-bold text-muted-foreground">No Active Loans</div>
-                                        <p className="text-xs text-muted-foreground">
-                                            You are eligible for a loan up to {formatCurrency(50000)}.
-                                        </p>
-                                        <Button className="w-full" onClick={() => router.push('/apply')}>Apply Now</Button>
+                                        {hasCompletedLoan ? (
+                                            <div className="bg-green-50 p-4 rounded-lg border border-green-200 text-center">
+                                                <div className="text-2xl font-bold text-green-700 mb-1">🎉 Congratulations!</div>
+                                                <p className="text-sm text-green-600">
+                                                    You have successfully repaid your previous loan. You are now eligible to apply for a new loan.
+                                                </p>
+                                            </div>
+                                        ) : (
+                                            <div className="text-center py-4">
+                                                <div className="text-2xl font-bold text-slate-900">Get Started</div>
+                                                <p className="text-slate-600">Apply for a loan in minutes.</p>
+                                            </div>
+                                        )}
+
+                                        {!hasCompletedLoan && loans.length === 0 && (
+                                            <div className="bg-blue-50 p-4 rounded-lg border border-blue-200 mb-4">
+                                                <p className="text-blue-800 font-medium text-center">First time? Enjoy instant approval.</p>
+                                            </div>
+                                        )}
+
+                                        <Button className="w-full mt-2" onClick={() => router.push('/apply')}>Apply Now</Button>
                                     </>
                                 )}
                             </div>
@@ -613,67 +664,7 @@ export default function DashboardPage() {
                     </CardContent>
                 </Card>
 
-                {/* Loan History Section */}
-                {
-                    loans.length > 0 && (
-                        <div className="mt-8">
-                            <h2 className="text-xl font-semibold mb-4">Loan History</h2>
-                            <div className="space-y-4">
 
-                                {loans.filter(l => l.id !== activeLoan?.id).map((loan) => (
-                                    <Card key={loan.id} className="border-none shadow-sm">
-                                        <CardContent className="p-4">
-                                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                                                <div className="flex flex-col gap-1">
-                                                    <span className="font-bold">{formatCurrency(loan.amount)}</span>
-                                                    <div className="flex items-center gap-2 text-sm">
-                                                        <span className="font-bold text-muted-foreground">Loan Term:</span>
-                                                        <span>{loan.duration_months} Month{loan.duration_months !== 1 ? 's' : ''}</span>
-                                                    </div>
-                                                    <span className="text-xs text-muted-foreground">
-                                                        {new Date(loan.created_at).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center gap-4">
-                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium capitalize ${loan.payment_status === 'paid' ? 'bg-emerald-100 text-emerald-700' :
-                                                        loan.status === 'approved' ? 'bg-green-100 text-green-700' :
-                                                            loan.status === 'rejected' ? 'bg-red-100 text-red-700' :
-                                                                'bg-yellow-100 text-yellow-700'
-                                                        }`}>
-                                                        {loan.payment_status === 'paid' ? '✓ Completed' : loan.status.replace('_', ' ')}
-                                                    </span>
-                                                    <Button variant="ghost" size="sm" onClick={() => router.push(`/loans/${loan.id}`)}>
-                                                        View
-                                                    </Button>
-                                                </div>
-                                            </div>
-                                            {/* Repayment Info Row */}
-                                            <div className="grid grid-cols-3 gap-2 mt-3 pt-3 border-t text-sm">
-                                                <div>
-                                                    <p className="text-xs text-muted-foreground">Total Repayment</p>
-                                                    <p className="font-semibold text-purple-700">{formatCurrency(loan.total_repayment || 0)}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs text-muted-foreground">Amount Paid</p>
-                                                    <p className="font-semibold text-green-600">{formatCurrency(loan.amount_paid || 0)}</p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-xs text-muted-foreground">Repayment Status</p>
-                                                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${loan.payment_status === 'paid' ? 'bg-emerald-100 text-emerald-700' :
-                                                        loan.payment_status === 'partial' ? 'bg-yellow-100 text-yellow-700' :
-                                                            'bg-red-100 text-red-700'
-                                                        }`}>
-                                                        {loan.payment_status === 'paid' ? '✓ Fully Paid' : loan.payment_status === 'partial' ? 'Partial' : 'Unpaid'}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                ))}
-                            </div>
-                        </div>
-                    )
-                }
 
                 {/* Payment Modal */}
                 {

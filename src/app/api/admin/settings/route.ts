@@ -1,16 +1,12 @@
 
 import { createClient } from "@supabase/supabase-js"; // Direct client for Service Role
-import { createClient as createAuthClient } from "@/lib/supabase/server"; // Auth client for permission check
 import { NextResponse } from "next/server";
+import { requireAdmin } from '@/lib/require-admin';
 
 export async function GET(request: Request) {
-    const supabase = await createAuthClient();
-
-    // 1. Strict Auth Check (Read-Only is fine with standard client usually, but let's use Service to be safe)
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user || user.app_metadata?.role !== 'admin') {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
+    // AUTH CHECK
+    const auth = await requireAdmin(request);
+    if (auth instanceof NextResponse) return auth;
 
     // 2. Data Access via Service Role (Bypasses RLS)
     const adminDb = createClient(
@@ -38,63 +34,10 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
-    const authClient = await createAuthClient();
-
-    // 1. Strict Authorization Check
-    const { data: { user }, error: authError } = await authClient.auth.getUser();
-
-    const role = user?.app_metadata?.role || '';
-
-    // DEBUG: Log Headers to see if cookies exist
-    const headersList = Object.fromEntries(request.headers.entries());
-    console.log("Budget Update Headers Debug:", {
-        cookie: headersList['cookie'] ? 'Present' : 'Missing',
-        authHeader: headersList['authorization'] ? 'Present' : 'Missing'
-    });
-
-    // Fallback logic follows...
-
-    // Fallback: If cookie auth failed, try Authorization Header
-    let finalUser = user;
-    let finalRole = role;
-    let finalAuthError = authError;
-
-    if (!finalUser) {
-        const authHeader = request.headers.get('Authorization');
-        if (authHeader) {
-            console.log("Budget Update: Falling back to Auth Header...");
-            const token = authHeader.replace('Bearer ', '');
-            const { data: { user: headerUser }, error: headerError } = await authClient.auth.getUser(token);
-
-            if (headerUser) {
-                finalUser = headerUser;
-                finalRole = headerUser.app_metadata?.role || '';
-                finalAuthError = null;
-                console.log("Budget Update: Auth Header Success! Role:", finalRole);
-            } else {
-                console.warn("Budget Update: Auth Header Failed:", headerError?.message);
-            }
-        }
-    }
-
-    console.log("Budget Update Final Auth Debug:", {
-        userId: finalUser?.id,
-        role: finalRole,
-        originalError: authError?.message
-    });
-
-    // Check Role
-    if (!finalUser || (!finalRole.startsWith('admin') && finalRole !== 'super_admin')) {
-        console.warn("Budget Update Unauthorized. Role:", finalRole);
-
-        // RETURN 200 to ensure Client receives the Debug Body
-        // Frontend will check 'success' flag
-        return NextResponse.json({
-            success: false,
-            error: `Unauthorized (Server sees role: '${finalRole}')`,
-            debug: { role: finalRole, uid: finalUser?.id, authError: finalAuthError?.message, cookies: headersList['cookie'] ? 'Yes' : 'No' }
-        }, { status: 200 }); // Intentional 200
-    }
+    // AUTH CHECK
+    const auth = await requireAdmin(request);
+    if (auth instanceof NextResponse) return auth;
+    const { session } = auth;
 
     try {
         const body = await request.json();
@@ -114,7 +57,7 @@ export async function POST(request: Request) {
             .upsert({
                 key: 'total_lending_limit',
                 value: String(totalLimit),
-                updated_by: finalUser.id,
+                updated_by: session.user.id,
                 updated_at: new Date().toISOString()
             });
 

@@ -1,26 +1,14 @@
 
-import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { requireAdmin } from '@/lib/require-admin'
 
 export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
-    const cookieStore = await cookies()
-    const supabase = createServerClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-        {
-            cookies: { getAll() { return cookieStore.getAll() } },
-        }
-    )
-
-    // Check Auth
-    const { data: { session } } = await supabase.auth.getSession()
-    if (!session || (session.user.app_metadata?.role !== 'admin' && session.user.app_metadata?.role !== 'admin_verifier' && session.user.app_metadata?.role !== 'admin_approver')) {
-        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    // AUTH CHECK
+    const auth = await requireAdmin(request);
+    if (auth instanceof NextResponse) return auth;
 
     try {
         const supabaseAdmin = createClient(

@@ -32,6 +32,8 @@ CREATE INDEX IF NOT EXISTS idx_loan_payments_received_at ON loan_payments(receiv
 ALTER TABLE loan_payments ENABLE ROW LEVEL SECURITY;
 
 -- Admin can read all payments
+-- Admin can read all payments
+DROP POLICY IF EXISTS "Admins can read all payments" ON loan_payments;
 CREATE POLICY "Admins can read all payments" ON loan_payments
     FOR SELECT
     USING (
@@ -46,6 +48,7 @@ CREATE POLICY "Admins can read all payments" ON loan_payments
     );
 
 -- Admin can insert payments
+DROP POLICY IF EXISTS "Admins can insert payments" ON loan_payments;
 CREATE POLICY "Admins can insert payments" ON loan_payments
     FOR INSERT
     WITH CHECK (
@@ -60,6 +63,7 @@ CREATE POLICY "Admins can insert payments" ON loan_payments
     );
 
 -- Users can read their own loan's payments
+DROP POLICY IF EXISTS "Users can read own loan payments" ON loan_payments;
 CREATE POLICY "Users can read own loan payments" ON loan_payments
     FOR SELECT
     USING (

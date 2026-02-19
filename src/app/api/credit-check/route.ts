@@ -1,5 +1,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
+import { logger } from '@/lib/safe-logger';
+import { validateCSRF } from '@/lib/csrf';
+import { creditCheckSchema } from '@/lib/validation';
 
 /**
  * Mock Credit Engine
@@ -28,11 +31,26 @@ interface CreditReport {
 
 export async function POST(req: NextRequest) {
     try {
-        const { nationalId } = await req.json();
-
-        if (!nationalId) {
-            return NextResponse.json({ success: false, error: 'National ID is required' }, { status: 400 });
+        // 0. CSRF Protection
+        const csrf = await validateCSRF(req);
+        if (!csrf.valid) {
+            return NextResponse.json({ success: false, error: csrf.error }, { status: 403 });
         }
+
+        const rawBody = await req.json();
+        const validation = creditCheckSchema.safeParse(rawBody);
+
+        if (!validation.success) {
+            logger.warn('Credit check validation failed', { issues: validation.error.issues });
+            return NextResponse.json({
+                success: false,
+                error: 'Invalid request data',
+                details: validation.error.issues
+            }, { status: 400 });
+        }
+
+        const { nationalId } = validation.data;
+        logger.info('Credit check requested', { nationalId }); // safe-logger will redact this automatically
 
         // Deterministic seeding based on National ID numeric values
         const seed = nationalId.split('').reduce((acc: number, char: string) => acc + (parseInt(char) || 0), 0);
@@ -64,7 +82,7 @@ export async function POST(req: NextRequest) {
         const possibleProviders = ['Standard Bank', 'FNB Namibia', 'Nedbank', 'Letshego', 'Bank Windhoek'];
         const possibleTypes = ['Personal Loan', 'Auto Loan', 'Credit Card', 'Overdraft'];
 
-        const history = [];
+        const history: CreditReport['history'] = [];
         // Number of accounts based on seed
         const numAccounts = (seed % 4) + 1; // 1 to 4 accounts
 
@@ -74,7 +92,7 @@ export async function POST(req: NextRequest) {
             history.push({
                 provider: possibleProviders[accSeed % possibleProviders.length],
                 type: possibleTypes[accSeed % possibleTypes.length],
-                status: score > 600 ? (accSeed % 3 === 0 ? 'Paid' : 'Active') : (accSeed % 3 === 0 ? 'Defaulted' : 'Active'),
+                status: (score > 600 ? (accSeed % 3 === 0 ? 'Paid' : 'Active') : (accSeed % 3 === 0 ? 'Defaulted' : 'Active')) as 'Active' | 'Paid' | 'Defaulted',
                 balance: (accSeed * 1000) % 50000
             });
         }
@@ -96,7 +114,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ success: true, data: report });
 
     } catch (error: any) {
-        console.error('Credit Check API Error:', error);
-        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+        logger.error('Credit Check API Error', { error: error.message });
+        return NextResponse.json({ success: false, error: 'Failed to process credit check' }, { status: 500 });
     }
 }

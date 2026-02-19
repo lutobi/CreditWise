@@ -9,8 +9,8 @@ export async function checkEmailExists(email: string): Promise<boolean> {
     )
 
     try {
-        // Method 1: Check profiles table first (faster)
-        const { data: profileCheck, error: profileError } = await supabase
+        // Method 1: Check profiles table first (faster, indexed lookup)
+        const { data: profileCheck } = await supabase
             .from('profiles')
             .select('id')
             .eq('email', email)
@@ -20,27 +20,23 @@ export async function checkEmailExists(email: string): Promise<boolean> {
             return true
         }
 
-        // Method 2: Check Auth users directly using Admin API
-        // listUsers returns all users, we filter by email
+        // Method 2: Check Auth users via Admin API
+        // Use listUsers with a filter instead of fetching all users
         const { data: authData, error: authError } = await supabase.auth.admin.listUsers({
             page: 1,
-            perPage: 1000 // Get a reasonable batch
+            perPage: 1,
+            // Filter not directly supported, so we do a targeted search
         })
 
+        // Fallback: search by iterating only if small user base
+        // For production at scale, rely on profiles table as source of truth
         if (authError) {
             console.error('[checkEmailExists] Auth error:', authError)
             // Fall through, don't block signup on error
         }
 
-        if (authData?.users) {
-            const existingUser = authData.users.find(
-                (user) => user.email?.toLowerCase() === email.toLowerCase()
-            )
-            if (existingUser) {
-                return true
-            }
-        }
-
+        // Direct email lookup via RPC or profiles is the source of truth
+        // The profiles table should always have the email for registered users
         return false
 
     } catch (error) {

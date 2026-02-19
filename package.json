@@ -12,7 +12,8 @@
     "test:headed": "playwright test --headed",
     "test:report": "playwright show-report",
     "test:integration": "node tests/integration-tests.js",
-    "verify:storage": "node tests/verify-storage.js"
+    "verify:storage": "node tests/verify-storage.js",
+    "mock:realpay": "npx ts-node mock-realpay/server.ts"
   },
   "dependencies": {
     "@aws-sdk/client-rekognition": "^3.962.0",
@@ -42,6 +43,7 @@
   "devDependencies": {
     "@playwright/test": "^1.57.0",
     "@tailwindcss/postcss": "^4",
+    "@types/express": "^5",
     "@types/node": "^20",
     "@types/pg": "^8.16.0",
     "@types/react": "^19",
@@ -49,7 +51,9 @@
     "dotenv": "^17.2.3",
     "eslint": "^9",
     "eslint-config-next": "^16.1.0",
+    "express": "^5",
     "tailwindcss": "^4",
+    "ts-node": "^10",
     "typescript": "^5"
   }
 }

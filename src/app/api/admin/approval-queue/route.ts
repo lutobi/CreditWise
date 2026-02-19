@@ -1,48 +1,15 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { requireAdmin } from '@/lib/require-admin';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
+    // AUTH CHECK
+    const auth = await requireAdmin(req);
+    if (auth instanceof NextResponse) return auth;
+
     try {
-        // 1. AUTH CHECK
-        const cookieStore = await cookies();
-        const authClient = createServerClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            {
-                cookies: {
-                    getAll() { return cookieStore.getAll() }
-                }
-            }
-        );
-
-        let { data: { session } } = await authClient.auth.getSession();
-
-        // FAILOVER: Check Authorization Header if cookie session failed
-        if (!session && req.headers.get('Authorization')) {
-            const authHeader = req.headers.get('Authorization');
-            const token = authHeader?.split(' ')[1];
-            if (token) {
-                const { data: { user }, error } = await authClient.auth.getUser(token);
-                if (user && !error) {
-                    // @ts-ignore - Construct a minimal session object
-                    session = { user, access_token: token };
-                }
-            }
-        }
-
-        // Relaxed Role Check
-        const appRole = session?.user?.app_metadata?.role;
-        const userRole = session?.user?.user_metadata?.role;
-        const role = appRole || userRole;
-
-        if (!session || (role !== 'admin' && role !== 'admin_approver' && role !== 'super_admin')) {
-            return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
-        }
-
         const { searchParams } = new URL(req.url);
         const tab = searchParams.get('tab') || 'queue';
         const statusFilter = tab === 'queue' ? 'pending' : 'approved';
@@ -58,6 +25,8 @@ export async function GET(req: Request) {
             .from('loans')
             .select('*, profiles:user_id (full_name, national_id)')
             .eq('status', statusFilter)
+            .eq('status', statusFilter)
+            // .neq('payment_status', 'paid') // REMOVED: Filters out NULLs which are new loans
             .order('created_at', { ascending: false });
 
         if (loansError) {
@@ -65,17 +34,19 @@ export async function GET(req: Request) {
             return NextResponse.json({ success: false, error: loansError.message }, { status: 500 });
         }
 
-        if (!loans || loans.length === 0) {
+        // Filter in memory to safely handle NULL payment_status
+        const activeLoans = loans?.filter(l => l.payment_status !== 'paid') || [];
+
+        if (activeLoans.length === 0) {
             return NextResponse.json({ success: true, data: [] });
         }
 
         // Fetch Verifications for these users
-        const userIds = loans.map(l => l.user_id);
+        const userIds = activeLoans.map(l => l.user_id);
         const { data: verifs, error: verifError } = await supabase
             .from('verifications')
             .select('*')
-            .in('user_id', userIds)
-            .eq('is_employed', true);
+            .in('user_id', userIds);
 
         if (verifError) {
             console.error('Verif Fetch Error:', verifError);
@@ -84,9 +55,16 @@ export async function GET(req: Request) {
 
         // Merge Logic
         const validVerifs = verifs || [];
-        const verifiedLoans = loans.filter(l => validVerifs.some(v => v.user_id === l.user_id));
 
-        const items = verifiedLoans.map(l => {
+        // Filter: Keep only loans that are Verified (either via Verification table or Video Status)
+        const readyForApproval = activeLoans.filter(l => {
+            const v = validVerifs.find(ver => ver.user_id === l.user_id);
+            const isEmployed = v?.is_employed === true;
+            const isVideoVerified = l.application_data?.status_detail === 'video_verified';
+            return isEmployed || isVideoVerified;
+        });
+
+        const items = readyForApproval.map(l => {
             const v = validVerifs.find(ver => ver.user_id === l.user_id);
             // @ts-ignore
             const profileName = l.profiles ? (Array.isArray(l.profiles) ? l.profiles[0]?.full_name : l.profiles.full_name) : 'Unknown';
@@ -102,8 +80,9 @@ export async function GET(req: Request) {
                 created_at: l.created_at,
                 full_name: profileName || 'Unknown',
                 national_id: profileId || 'N/A',
-                monthly_income: v?.monthly_income || 0,
-                employer_name: v?.employer_name || 'Unknown',
+                // Fallback to application data if verification missing
+                monthly_income: v?.monthly_income || l.application_data?.monthlyIncome || 0,
+                employer_name: v?.employer_name || l.application_data?.employerName || 'Unknown',
                 credit_score: v?.credit_score || 0,
                 verification_date: v?.updated_at || v?.created_at || '',
                 reference_id: l.application_data?.refId || 'N/A'

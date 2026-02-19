@@ -66,6 +66,8 @@ export default function VerificationPage() {
     const [loading, setLoading] = useState(true)
     const [auditLogs, setAuditLogs] = useState<AuditLog[]>([])
     const [viewingHistory, setViewingHistory] = useState<string | null>(null)
+    const [borrowerHistory, setBorrowerHistory] = useState<any[]>([]);
+    const [viewingBorrower, setViewingBorrower] = useState<string | null>(null);
 
     const [error, setError] = useState<string | null>(null)
     const [checkingFaceId, setCheckingFaceId] = useState<string | null>(null)
@@ -323,7 +325,8 @@ export default function VerificationPage() {
 
             const data = await res.json()
             if (data.success) {
-                alert(`User Verified! Score: ${data.similarity?.toFixed(1) || 'N/A'}%`)
+                // Show Credit Score if available, otherwise "Verified"
+                alert(`User Verified! Score: ${data.data?.score || 'Check Logs'}`)
             } else {
                 alert("Verification Result: " + data.error)
             }
@@ -347,6 +350,35 @@ export default function VerificationPage() {
             }
         } catch (e) { console.error(e) }
     }
+
+    const handleViewBorrowerHistory = async (userId: string, fullName: string) => {
+        setViewingBorrower(fullName);
+        setBorrowerHistory([]); // clear
+
+        try {
+            const session = (await supabase.auth.getSession()).data.session;
+            const res = await fetch(`/api/admin/borrower-history?userId=${userId}`, {
+                headers: {
+                    'Authorization': `Bearer ${session?.access_token}`
+                }
+            });
+
+            if (res.status === 401) {
+                alert("Session stale or unauthorized. Please Log Out and Log In to refresh permissions.");
+                return;
+            }
+
+            const result = await res.json();
+
+            if (result.success && result.data) {
+                setBorrowerHistory(result.data);
+            } else {
+                console.error("Failed to load history:", result.error);
+            }
+        } catch (e) {
+            console.error("History fetch error:", e);
+        }
+    }
     const [viewingReport, setViewingReport] = useState<any | null>(null);
 
     const handleViewReport = async (nationalId: string) => {
@@ -366,16 +398,37 @@ export default function VerificationPage() {
         } catch (e) { alert("Network Error"); }
     }
 
-    const handleClearItem = async (loanId: string) => {
-        if (!confirm("Force remove this item from the queue? Only do this if it is a stale test record.")) return;
+    const handleRejectApplication = async (item: VerificationItem) => {
+        const reason = prompt(`Reject application for ${item.full_name}? Enter reason (e.g. 'Fraud', 'Affordability', 'Document Mismatch'):`);
+        if (!reason) return; // User cancelled
+
+        if (!confirm(`Are you sure you want to REJECT this application?\nReason: ${reason}\n\nThis will send a rejection email to the user.`)) return;
+
         try {
-            await fetch('/api/admin/status-update', {
+            const session = (await supabase.auth.getSession()).data.session;
+            const res = await fetch('/api/admin/status-update', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ loanId, status: 'rejected', reason: 'Admin Manual Clear' })
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${session?.access_token}`
+                },
+                body: JSON.stringify({ loanId: item.loan_id, status: 'rejected', reason })
             });
-            fetchQueue();
-        } catch (e) { alert("Failed to clear"); }
+
+            if (res.status === 401) {
+                alert("Session stale or unauthorized. Please Log Out and Log In to refresh permissions.");
+                return;
+            }
+
+            const data = await res.json();
+
+            if (data.success) {
+                alert("Application Rejected.");
+                fetchQueue();
+            } else {
+                alert("Failed to reject: " + data.error);
+            }
+        } catch (e) { alert("Network Error"); }
     }
 
     return (
@@ -617,14 +670,13 @@ export default function VerificationPage() {
                                                     <Button variant="link" className="h-auto p-0 text-purple-600 justify-end" onClick={() => handleViewReport(item.national_id)}>
                                                         View Credit Report
                                                     </Button>
+                                                    <Button variant="link" className="h-auto p-0 text-blue-600 justify-end font-semibold" onClick={() => handleViewBorrowerHistory(item.user_id, item.full_name)}>
+                                                        View Borrower History
+                                                    </Button>
                                                     <Button variant="link" className="h-auto p-0 text-slate-500 justify-end" onClick={() => handleViewHistory(item.loan_id)}>
                                                         View Audit History
                                                     </Button>
-                                                    {process.env.NODE_ENV === 'development' && (
-                                                        <Button variant="link" className="h-auto p-0 text-red-400 text-xs justify-end" onClick={() => handleClearItem(item.loan_id)}>
-                                                            [Dev] Force Clear
-                                                        </Button>
-                                                    )}
+
                                                     <div className="font-semibold text-slate-900 mt-2">N$ {item.amount}</div>
                                                     <div className="text-xs text-slate-500">Loan Request</div>
                                                 </div>
@@ -761,6 +813,9 @@ export default function VerificationPage() {
                                                 <Button size="sm" variant="ghost" className="text-slate-500" onClick={() => handleViewHistory(item.loan_id)}>
                                                     View History
                                                 </Button>
+                                                <Button size="sm" variant="outline" className="text-red-600 border-red-200 hover:bg-red-50" onClick={() => handleRejectApplication(item)}>
+                                                    Reject Application
+                                                </Button>
                                                 <Button className="bg-blue-600 hover:bg-blue-700" onClick={() => handleVerifyUser(item)}>
                                                     <UserCheck className="w-4 h-4 mr-2" />
                                                     Confirm Identity
@@ -776,7 +831,67 @@ export default function VerificationPage() {
             </main >
             <Footer />
 
-            {/* Credit Report Modal */}
+            {/* Borrower History Modal */}
+            {viewingBorrower && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <Card className="w-full max-w-3xl max-h-[85vh] overflow-hidden flex flex-col">
+                        <CardHeader className="flex flex-row justify-between items-center bg-slate-50 border-b py-4">
+                            <div>
+                                <CardTitle>Loan History: {viewingBorrower}</CardTitle>
+                                <p className="text-sm text-slate-500">Past performance and repayment records</p>
+                            </div>
+                            <Button size="icon" variant="ghost" onClick={() => setViewingBorrower(null)}><X className="w-5 h-5" /></Button>
+                        </CardHeader>
+                        <CardContent className="p-0 overflow-y-auto bg-white">
+                            <table className="w-full text-sm">
+                                <thead className="bg-slate-50 text-slate-500 font-medium border-b sticky top-0">
+                                    <tr>
+                                        <th className="px-4 py-3 text-left">Date</th>
+                                        <th className="px-4 py-3 text-left">Ref ID</th>
+                                        <th className="px-4 py-3 text-right">Amount</th>
+                                        <th className="px-4 py-3 text-center">Status</th>
+                                        <th className="px-4 py-3 text-center">Repaid</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100">
+                                    {borrowerHistory.length === 0 ? (
+                                        <tr><td colSpan={5} className="p-8 text-center text-slate-400">No history found.</td></tr>
+                                    ) : (
+                                        borrowerHistory.map((loan) => (
+                                            <tr key={loan.id} className="hover:bg-slate-50">
+                                                <td className="px-4 py-3 text-slate-600">{new Date(loan.created_at).toLocaleDateString()}</td>
+                                                <td className="px-4 py-3 font-mono text-xs">{loan.application_data?.refId || loan.id.slice(0, 8)}</td>
+                                                <td className="px-4 py-3 text-right font-medium">N$ {loan.amount}</td>
+                                                <td className="px-4 py-3 text-center">
+                                                    <span className={`px-2 py-0.5 rounded-full text-xs capitalize ${loan.status === 'approved' ? 'bg-green-100 text-green-700' :
+                                                        loan.status === 'rejected' ? 'bg-red-100 text-red-700' :
+                                                            'bg-slate-100 text-slate-700'
+                                                        }`}>{loan.status}</span>
+                                                </td>
+                                                <td className="px-4 py-3 text-center">
+                                                    {(() => {
+                                                        const totalRepayable = loan.amount * 1.25;
+                                                        const isRepaid = loan.status === 'completed' ||
+                                                            loan.status === 'paid' ||
+                                                            (loan.amount_paid >= totalRepayable - 0.1);
+
+                                                        return (
+                                                            <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${isRepaid ? 'bg-emerald-100 text-emerald-700' : 'bg-yellow-50 text-yellow-600'
+                                                                }`}>
+                                                                {isRepaid ? 'YES' : 'NO'}
+                                                            </span>
+                                                        );
+                                                    })()}
+                                                </td>
+                                            </tr>
+                                        ))
+                                    )}
+                                </tbody>
+                            </table>
+                        </CardContent>
+                    </Card>
+                </div>
+            )}
             {
                 viewingReport && (
                     <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">

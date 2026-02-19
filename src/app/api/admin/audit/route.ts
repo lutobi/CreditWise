@@ -1,8 +1,13 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { requireAdmin } from '@/lib/require-admin';
 
 export async function GET(req: NextRequest) {
+    // AUTH CHECK
+    const auth = await requireAdmin(req);
+    if (auth instanceof NextResponse) return auth;
+
     try {
         const { searchParams } = new URL(req.url);
         const loanId = searchParams.get('loanId');

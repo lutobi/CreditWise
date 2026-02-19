@@ -1,59 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
 import { sendLoanDecisionEmail } from '@/app/actions/email';
+import { requireAdmin } from '@/lib/require-admin';
 
 // Force dynamic to prevent caching of admin actions
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
+    // AUTH CHECK
+    const auth = await requireAdmin(req);
+    if (auth instanceof NextResponse) return auth;
+    const { session } = auth;
+
     try {
         const { loanId, status, reason } = await req.json();
 
         if (!loanId || !status) {
             return NextResponse.json({ success: false, error: 'Missing required fields' }, { status: 400 });
-        }
-
-        // 1. AUTH CHECK (Security First)
-        const cookieStore = await cookies();
-        const authClient = createServerClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            {
-                cookies: {
-                    getAll() { return cookieStore.getAll() },
-                    setAll(cookiesToSet) {
-                        // We don't need to set cookies here, just reading session
-                    }
-                }
-            }
-        );
-
-        const { data: { session: cookieSession } } = await authClient.auth.getSession();
-        let session = cookieSession;
-
-        // FAILOVER: Check Authorization Header if cookie session failed
-        if (!session && req.headers.get('Authorization')) {
-            const authHeader = req.headers.get('Authorization');
-            const token = authHeader?.split(' ')[1];
-            if (token) {
-                const { data: { user }, error } = await authClient.auth.getUser(token);
-                if (user && !error) {
-                    // @ts-ignore - Construct a minimal session object
-                    session = { user, access_token: token };
-                }
-            }
-        }
-
-        // Strict Admin Check (Allow app_metadata OR user_metadata)
-        const appRole = session?.user?.app_metadata?.role;
-        const userRole = session?.user?.user_metadata?.role;
-        const role = appRole || userRole;
-
-        if (!session || (role !== 'admin' && role !== 'admin_approver' && role !== 'super_admin')) {
-            console.log(`[Auth Failed] User: ${session?.user?.id}, Role: ${role}`);
-            return NextResponse.json({ success: false, error: 'Unauthorized Access' }, { status: 401 });
         }
 
         // 2. DATABASE OPERATION (Service Role - Bypasses RLS)
@@ -135,7 +98,8 @@ export async function POST(req: NextRequest) {
             }
             else if (status === 'rejected') {
                 const { sendRejectionEmail } = await import('@/lib/email');
-                await sendRejectionEmail(emailUser, reason || 'Did not meet criteria');
+                const emailResult = await sendRejectionEmail(emailUser, reason || 'Did not meet criteria');
+                console.log("[StatusUpdate] Rejection Email Result:", emailResult);
             }
         }
 

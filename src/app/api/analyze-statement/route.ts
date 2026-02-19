@@ -1,5 +1,7 @@
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
+import { cookies } from 'next/headers';
 
 // Polyfills for pdf-parse in Node.js environment (Next.js Build)
 if (typeof Promise.withResolvers === 'undefined') {
@@ -34,6 +36,18 @@ if (typeof global.ImageData === 'undefined') {
 const pdf = require('pdf-parse');
 
 export async function POST(req: NextRequest) {
+    // AUTH CHECK — require logged-in user
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+        { cookies: { getAll() { return cookieStore.getAll(); } } }
+    );
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
     try {
         const formData = await req.formData();
         const file = formData.get('file') as File;

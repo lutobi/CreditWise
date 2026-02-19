@@ -1,51 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
-import { createServerClient } from '@supabase/ssr';
-import { cookies } from 'next/headers';
+import { requireAdmin } from '@/lib/require-admin';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
+    // AUTH CHECK
+    const auth = await requireAdmin(req);
+    if (auth instanceof NextResponse) return auth;
+    const { session } = auth;
+
     try {
         const { loanId, amount, paymentMethod, referenceNumber, receivedAt, notes } = await req.json();
 
         if (!loanId || !amount) {
             return NextResponse.json({ success: false, error: 'Loan ID and amount are required' }, { status: 400 });
-        }
-
-        // 1. AUTH CHECK
-        const cookieStore = await cookies();
-        const authClient = createServerClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            {
-                cookies: {
-                    getAll() { return cookieStore.getAll() }
-                }
-            }
-        );
-
-        let { data: { session } } = await authClient.auth.getSession();
-
-        // FAILOVER: Check Authorization Header
-        if (!session && req.headers.get('Authorization')) {
-            const authHeader = req.headers.get('Authorization');
-            const token = authHeader?.split(' ')[1];
-            if (token) {
-                const { data: { user }, error } = await authClient.auth.getUser(token);
-                if (user && !error) {
-                    // @ts-ignore
-                    session = { user, access_token: token };
-                }
-            }
-        }
-
-        const appRole = session?.user?.app_metadata?.role;
-        const userRole = session?.user?.user_metadata?.role;
-        const role = appRole || userRole;
-
-        if (!session || (role !== 'admin' && role !== 'admin_approver' && role !== 'super_admin')) {
-            return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
         }
 
         // 2. RECORD PAYMENT (Service Role)

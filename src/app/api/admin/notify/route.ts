@@ -6,8 +6,13 @@ import { supabase } from '@/lib/supabase'; // Using the client or need a server 
 // To be safe, let's assume we need to join Loan + Profile.
 
 import { sendAdminLoanAlert } from '@/app/actions/email';
+import { requireAdmin } from '@/lib/require-admin';
 
 export async function POST(req: NextRequest) {
+    // AUTH CHECK
+    const auth = await requireAdmin(req);
+    if (auth instanceof NextResponse) return auth;
+
     try {
         const { loanId } = await req.json();
 

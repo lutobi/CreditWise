@@ -9,6 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { ShieldCheck, Banknote, Loader2, UserCog, Lock, TrendingUp } from "lucide-react"
 import { CircularProgress } from "@/components/ui/circular-progress"
+import { RealpayAdminPanel } from "@/components/realpay"
 
 export default function AdminRouter() {
     const { user, session, isLoading } = useAuth()
@@ -202,6 +203,11 @@ export default function AdminRouter() {
                                 </div>
                             </CardContent>
                         </Card>
+
+                        {/* Realpay Payment Analytics Panel */}
+                        <div className="col-span-2 mt-6">
+                            <RealpayAdminPanel />
+                        </div>
                     </div>
                 </div>
             </main>

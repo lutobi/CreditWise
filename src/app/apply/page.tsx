@@ -25,6 +25,8 @@ import { LiveSelfie } from "@/components/ui/live-selfie"
 import { toast } from "sonner"
 import { sendAdminLoanAlert } from "@/app/actions/email"
 import { formatCurrency } from "@/lib/utils"
+import { BankSelect } from "@/components/realpay/bank-verification"
+import { useAccountVerification, useRealpayFeatures } from "@/lib/realpay-hooks"
 
 export default function ApplyPage() {
     const { user, isLoading: authLoading } = useAuth()
@@ -35,6 +37,8 @@ export default function ApplyPage() {
     const [errors, setErrors] = React.useState<Record<string, string>>({})
     const [existingLoanId, setExistingLoanId] = React.useState<string | null>(null)
     const [capturedSelfiePreview, setCapturedSelfiePreview] = React.useState<string | null>(null)
+    const [showPrefillPrompt, setShowPrefillPrompt] = React.useState(false)
+    const [previousLoanData, setPreviousLoanData] = React.useState<any>(null)
 
     // Form State
     const [formData, setFormData] = React.useState({
@@ -141,20 +145,43 @@ export default function ApplyPage() {
                     console.log('✅ Found pending loan:', latestLoan.id)
                     toast.info("Resuming your pending application.")
                     setExistingLoanId(latestLoan.id)
-
-                    const parseData = (data: any) => {
-                        return typeof data === 'string' ? JSON.parse(data) : data || {}
+                    // ... (rest of details) ...
+                } else {
+                    // Loan is historical (Paid/Completed/Rejected)
+                    if (latestLoan.status === 'rejected') {
+                        const daysSince = (new Date().getTime() - new Date(latestLoan.created_at).getTime()) / (1000 * 3600 * 24);
+                        if (daysSince < 30) {
+                            console.log('⛔ Re-application blocked: Recent rejection');
+                            // Use a distinct state for Rejection vs Active
+                            setHasActiveLoanError(true);
+                            // We will handle the UI logic in render based on 'latestLoan.status'
+                            // For simplicity, store the status or rejection flag
+                            // Store the status or rejection flag in state correctly
+                            setFormData(prev => ({
+                                ...prev,
+                                verificationData: {
+                                    ...(prev.verificationData || {}),
+                                    blocked: true,
+                                    rejectionReason: latestLoan.application_data?.status_val || "Policy"
+                                }
+                            }));
+                            return;
+                        }
                     }
-                    const appData = parseData(latestLoan.application_data)
 
-                    setFormData(prev => ({
-                        ...prev,
-                        ...appData,
-                        loanAmount: latestLoan.amount,
-                        repaymentPeriod: latestLoan.duration_months,
-                    }))
+                    // Offer Pre-fill
+                    console.log('📜 Found historical loan:', latestLoan.id)
+                    try {
+                        const parseData = (data: any) => typeof data === 'string' ? JSON.parse(data) : data || {}
+                        const appData = parseData(latestLoan.application_data)
+                        if (appData && appData.firstName) {
+                            setPreviousLoanData(appData)
+                            setShowPrefillPrompt(true)
+                        }
+                    } catch (e) {
+                        console.error("Error parsing historical data", e)
+                    }
                 }
-                // If fully paid, rejected, or completed, allow new application
             } else {
                 // No existing loan, check for local draft
                 const savedDraft = localStorage.getItem('nomad_loan_draft');
@@ -172,6 +199,31 @@ export default function ApplyPage() {
         }
         checkExistingLoan()
     }, [user?.id, router])
+
+    const applyPrefill = () => {
+        if (!previousLoanData) return;
+
+        // Filter out sensitive or dynamic fields
+        const {
+            documents, idDocument, payslip, recentPayslip, selfie,
+            loanAmount, repaymentPeriod, loanPurpose,
+            confirmTruth, understandLegal, consentAffordability, consentVerification, termsAccepted, declarationDate, signatureName,
+            ...safeData
+        } = previousLoanData;
+
+        setFormData(prev => ({
+            ...prev,
+            ...safeData,
+            // Ensure defaults for reset fields
+            loanAmount: 5000,
+            repaymentPeriod: 1,
+            confirmTruth: false,
+            termsAccepted: false
+        }));
+
+        setShowPrefillPrompt(false);
+        toast.success("Welcome back! Your details have been pre-filled.");
+    }
 
     // Auto-Save to LocalStorage
     React.useEffect(() => {
@@ -375,12 +427,22 @@ export default function ApplyPage() {
         try {
             if (!user) throw new Error("Not authenticated");
 
+            // Read CSRF token from cookie for double-submit pattern
+            const csrfToken = document.cookie
+                .split(';')
+                .map(c => c.trim())
+                .find(c => c.startsWith('csrf_token='))
+                ?.split('=')
+                .slice(1)
+                .join('=') || '';
+
             // We now submit via API to capture IP and User Agent for electronic signature traceability
             const response = await fetch('/api/loans/submit', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+                    'x-csrf-token': csrfToken,
                 },
                 body: JSON.stringify({
                     ...formData,
@@ -444,30 +506,64 @@ export default function ApplyPage() {
     }
 
     // Show active loan error banner
+    // Show active loan error banner
     if (hasActiveLoanError) {
+        // High Contrast & Logic Check
+        const isRejection = formData.verificationData?.blocked;
+
+        if (isRejection) {
+            return (
+                <div className="container max-w-3xl mx-auto py-8 px-4">
+                    <Card className="border-red-200 bg-red-50">
+                        <CardHeader className="pb-2">
+                            <div className="flex items-center gap-3">
+                                <div className="w-12 h-12 rounded-full bg-red-100 flex items-center justify-center">
+                                    <svg className="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                    </svg>
+                                </div>
+                                <div>
+                                    <CardTitle className="text-lg text-red-800">Application Declined</CardTitle>
+                                    <p className="text-sm text-red-600 font-medium">Policy Restriction Active</p>
+                                </div>
+                            </div>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <p className="text-red-700">
+                                Your recent application was declined. As per our responsible lending policy, you may re-apply 30 days after your last application date.
+                            </p>
+                            <Button onClick={() => router.push('/dashboard')} className="bg-red-600 hover:bg-red-700 text-white w-full sm:w-auto">
+                                Return to Dashboard
+                            </Button>
+                        </CardContent>
+                    </Card>
+                </div>
+            )
+        }
+
         return (
             <div className="container max-w-3xl mx-auto py-8 px-4">
-                <Card className="border-amber-300 bg-amber-50/50 dark:bg-amber-950/20">
+                <Card className="border-amber-300 bg-amber-50 shadow-sm">
                     <CardHeader className="pb-2">
                         <div className="flex items-center gap-3">
-                            <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center">
-                                <svg className="w-6 h-6 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <div className="w-12 h-12 rounded-full bg-amber-100 flex items-center justify-center">
+                                <svg className="w-6 h-6 text-amber-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                                 </svg>
                             </div>
                             <div>
-                                <CardTitle className="text-lg text-amber-800 dark:text-amber-200">Active Loan in Progress</CardTitle>
+                                <CardTitle className="text-lg text-amber-900">Active Loan in Progress</CardTitle>
                             </div>
                         </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <p className="text-amber-700 dark:text-amber-300">
+                        <p className="text-amber-900 font-medium">
                             You currently have an active loan that hasn't been fully repaid. To apply for a new loan, please complete your current loan repayment first.
                         </p>
                         <div className="flex flex-col sm:flex-row gap-3">
                             <Button
                                 onClick={() => router.push('/dashboard')}
-                                className="bg-amber-600 hover:bg-amber-700 text-white"
+                                className="bg-amber-700 hover:bg-amber-800 text-white border-none"
                             >
                                 <svg className="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
@@ -478,7 +574,7 @@ export default function ApplyPage() {
                             <Button
                                 variant="outline"
                                 onClick={() => router.push('/')}
-                                className="border-amber-400 text-amber-700 hover:bg-amber-100 dark:text-amber-300 dark:hover:bg-amber-900/30"
+                                className="border-amber-400 text-amber-800 hover:bg-amber-100"
                             >
                                 Back to Home
                             </Button>
@@ -502,6 +598,25 @@ export default function ApplyPage() {
                 </div>
                 <Progress value={(step / 7) * 100} className="h-2" />
             </div>
+
+            {/* Return User Pre-fill Prompt (Only on Step 1) */}
+            {step === 1 && showPrefillPrompt && (
+                <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between animate-in slide-in-from-top-2">
+                    <div className="flex gap-3 items-center">
+                        <div className="bg-blue-100 p-2 rounded-full">
+                            <CheckCircle2 className="w-5 h-5 text-blue-600" />
+                        </div>
+                        <div>
+                            <h4 className="text-sm font-semibold text-blue-900">Welcome back, {previousLoanData?.firstName}!</h4>
+                            <p className="text-xs text-blue-700">Would you like to use details from your last application?</p>
+                        </div>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button size="sm" variant="ghost" className="text-blue-700 hover:bg-blue-100" onClick={() => setShowPrefillPrompt(false)}>No, thanks</Button>
+                        <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={applyPrefill}>Yes, Pre-fill</Button>
+                    </div>
+                </div>
+            )}
 
             <Card className={errors && Object.keys(errors).length > 0 ? "border-red-300 shadow-sm" : ""}>
                 <CardHeader>
@@ -551,11 +666,29 @@ export default function ApplyPage() {
                     {/* Step 3: Banking */}
                     {step === 3 && (
                         <div className="space-y-4">
-                            <FormInput label="Bank Name" name="bankName" placeholder="e.g. FNB Namibia" value={formData.bankName} onChange={updateField} error={errors.bankName} />
+                            <div className="space-y-2">
+                                <label className="text-sm font-medium">Bank</label>
+                                <BankSelect
+                                    value={formData.bankName}
+                                    onChange={(bank) => {
+                                        updateField('bankName', bank.name)
+                                        updateField('branchCode', bank.branchCode)
+                                    }}
+                                />
+                                {errors.bankName && <p className="text-xs text-red-500 mt-1">{errors.bankName}</p>}
+                            </div>
                             <FormInput label="Account Holder Name" name="accountHolder" placeholder="e.g. J Doe" value={formData.accountHolder} onChange={updateField} error={errors.accountHolder} />
                             <FormInput label="Account Number" name="accountNumber" placeholder="e.g. 62123456789" value={formData.accountNumber} onChange={updateField} error={errors.accountNumber} />
                             <FormSelect label="Account Type" name="accountType" options={["Savings", "Cheque/Current"]} value={formData.accountType} onChange={updateField} />
-                            <FormInput label="Branch Code" name="branchCode" placeholder="e.g. 280172" value={formData.branchCode} onChange={updateField} error={errors.branchCode} />
+                            <FormInput label="Branch Code" name="branchCode" placeholder="e.g. 280172" value={formData.branchCode} onChange={updateField} error={errors.branchCode} disabled={!!formData.bankName} />
+
+                            {/* Bank Verification Status */}
+                            {formData.verificationData?.bankVerified && (
+                                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                    <CheckCircle2 className="w-5 h-5 text-green-600" />
+                                    <span className="text-sm text-green-700">Bank account verified successfully</span>
+                                </div>
+                            )}
                         </div>
                     )}
 
@@ -581,9 +714,26 @@ export default function ApplyPage() {
                                 </div>
 
 
-                                <div className="space-y-2">
-                                    <label className="text-sm font-semibold leading-none text-slate-900">Loan Amount: {formatCurrency(formData.loanAmount)}</label>
-                                    <input type="range" name="loanAmount" min="1000" max="50000" step="1000" className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary" value={formData.loanAmount} onChange={(e) => updateField('loanAmount', parseInt(e.target.value))} />
+                                <div className="space-y-4">
+                                    <div className="flex justify-between items-end">
+                                        <label className="text-sm font-semibold leading-none text-slate-900">Loan Amount (N$)</label>
+                                        <input
+                                            type="number"
+                                            className="w-24 px-2 py-1 text-right text-lg font-bold border rounded-md"
+                                            value={formData.loanAmount}
+                                            onChange={(e) => {
+                                                let val = parseInt(e.target.value) || 0;
+                                                if (val > 50000) val = 50000;
+                                                updateField('loanAmount', val);
+                                            }}
+                                            min="1000" max="50000"
+                                        />
+                                    </div>
+                                    <input type="range" name="loanAmount" min="1000" max="50000" step="50" className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary" value={formData.loanAmount} onChange={(e) => updateField('loanAmount', parseInt(e.target.value))} />
+                                    <div className="flex justify-between text-xs text-slate-400">
+                                        <span>N$ 1,000</span>
+                                        <span>N$ 50,000</span>
+                                    </div>
                                 </div>
 
                                 <div className="space-y-2">
@@ -658,7 +808,7 @@ export default function ApplyPage() {
                                             <div className="text-center">
                                                 <div className="relative inline-block">
                                                     <img
-                                                        src={formData.selfie || capturedSelfiePreview || ''}
+                                                        src={capturedSelfiePreview || formData.selfie || ''}
                                                         alt="Selfie"
                                                         className="mx-auto h-32 w-32 object-cover rounded-full border-2 border-green-500 mb-2"
                                                     />
@@ -750,19 +900,23 @@ export default function ApplyPage() {
                                         <h3 className="text-lg font-semibold text-slate-900">Legal Declaration & Consent</h3>
                                     </div>
 
+                                    <div className="bg-amber-50 border border-amber-200 rounded-md p-4 text-sm text-amber-900 mb-2">
+                                        <p className="font-bold mb-1">Mandatory Acknowledgement:</p>
+                                        <p>By proceeding, you explicitly acknowledge that the Loan Agreement has been completed in full <strong>prior to you applying your signature</strong>.</p>
+                                    </div>
+
                                     <div className="h-48 overflow-y-auto pr-2 text-sm text-slate-600 space-y-3 pretty-scrollbar font-leading-relaxed">
-                                        <p><strong>1. Accuracy of Information:</strong> I confirm that all information provided in this application is true, complete, and accurate. I understand that providing false or misleading information is a serious offense and may result in the rejection of my application and potential legal action.</p>
-                                        <p><strong>2. Credit Check Consent:</strong> I voluntarily consent to OMARI FINANCE conducting credit checks and affordability assessments as required by the Financial Institutions and Markets Act (FIMA) and NAMFISA regulations. This includes verifying my income, employment details, and credit history with registered credit bureaus.</p>
-                                        <p><strong>3. Data Privacy:</strong> I authorize OMARI FINANCE to process my personal data in accordance with their Privacy Policy for the purpose of assessing this loan application.</p>
-                                        <p><strong>4. Repayment Commitment:</strong> I acknowledge that by signing this agreement, I am legally bound to repay the loan amount plus interest and fees as stipulated in the Loan Agreement.</p>
-                                        <p><strong>5. Debit Order Authority:</strong> I hereby authorize OMARI FINANCE to issue and deliver payment instructions to the bank for collection against my account at the abovementioned bank on condition that the sum of such payment instructions will never exceed my obligations as agreed to in the Agreement. I understand that the withdrawals authorized here will be processed through a computerized system provided by the Namibian Banks.</p>
-                                        <p><strong>6. Rights & Complaints:</strong> I acknowledge my right to lodge a complaint with OMARI FINANCE's internal dispute resolution department, and subsequently to NAMFISA if the matter remains unresolved.</p>
+                                        <p><strong>1. Financial Terms:</strong> I understand that this is a short-term loan strictly limited to 1 month. The interest rate is fixed at 30%, and penalty interest of 5% per month applies to any arrears (capped at the capital amount).</p>
+                                        <p><strong>2. Affordability:</strong> I confirm that I have truthfully disclosed all my financial obligations and that I can afford the total repayment amount without experiencing financial hardship.</p>
+                                        <p><strong>3. Authority to Debit:</strong> I hereby authorize OMARI FINANCE to issue debit payment instructions against my bank account for the repayment amount. I understand that I am liable for any bank charges resulting from failed deductions due to insufficient funds.</p>
+                                        <p><strong>4. Truth & Accuracy:</strong> I declare that all information provided in this application is true and correct. I understand that providing false information constitutes fraud.</p>
+                                        <p><strong>5. Dispute Resolution:</strong> I have been informed of the internal complaint resolution procedures and my right to escalate unresolved complaints to NAMFISA.</p>
                                     </div>
                                 </div>
 
                                 <div className="space-y-3 bg-card border border-border p-4 rounded-lg shadow-sm">
                                     <Checkbox
-                                        label="I have read, understood, and agree to the Terms & Conditions, Privacy Policy, and the declarations above."
+                                        label="I confirm the loan agreement was fully completed before I signed it, and I agree to the Terms & Conditions and Privacy Policy."
                                         name="termsAccepted"
                                         checked={formData.termsAccepted}
                                         onChange={updateField}
@@ -790,7 +944,7 @@ export default function ApplyPage() {
                                 </div>
 
                                 <div className="text-xs text-center text-zinc-400 mt-4">
-                                    By clicking "Submit Application", you confirm your digital signature.
+                                    By clicking "Submit Application", you legally sign this agreement.
                                 </div>
                             </div>
                         )

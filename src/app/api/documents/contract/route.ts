@@ -3,16 +3,29 @@ import { createClient } from '@supabase/supabase-js';
 import { createServerClient } from '@supabase/ssr';
 import { cookies } from 'next/headers';
 import { generateLoanAgreement } from '@/lib/pdf-generator';
+import { logger } from '@/lib/safe-logger';
+import { contractRequestSchema } from '@/lib/validation';
 
 export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
     try {
-        const { loanId } = await req.json();
+        // Auth is handled below via JWT session check
+        // CSRF removed: both admin and user frontends call this with JWT only
 
-        if (!loanId) {
-            return NextResponse.json({ error: 'Loan ID required' }, { status: 400 });
+        const rawBody = await req.json();
+        const validation = contractRequestSchema.safeParse(rawBody);
+
+        if (!validation.success) {
+            logger.warn('Contract request validation failed', { issues: validation.error.issues });
+            return NextResponse.json({
+                success: false,
+                error: 'Invalid request data',
+                details: validation.error.issues
+            }, { status: 400 });
         }
+
+        const { loanId } = validation.data;
 
         // 1. AUTH CHECK (Admin Only)
         const cookieStore = await cookies();
@@ -67,8 +80,8 @@ export async function POST(req: NextRequest) {
         const loan = loans?.[0];
 
         if (loanError) {
-            console.error("Contract Fetch Error:", loanError);
-            return NextResponse.json({ error: `DB Error: ${loanError.message}` }, { status: 500 });
+            logger.error('Contract Fetch Error', { error: loanError, loanId });
+            return NextResponse.json({ error: 'Database error' }, { status: 500 });
         }
 
         if (!loan) {
@@ -95,12 +108,12 @@ export async function POST(req: NextRequest) {
                 }
             });
         } catch (genError: any) {
-            console.error("PDF Generation Error Details:", genError);
-            return NextResponse.json({ error: `Failed to generate PDF: ${genError.message}` }, { status: 500 });
+            logger.error('PDF Generation Error', { error: genError.message, loanId });
+            return NextResponse.json({ error: 'Failed to generate contract' }, { status: 500 });
         }
 
     } catch (error: any) {
-        console.error('Contract Route Error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        logger.error('Contract Route Error', { error: error.message });
+        return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
     }
 }
