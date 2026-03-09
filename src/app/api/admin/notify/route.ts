@@ -1,12 +1,10 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import { supabase } from '@/lib/supabase'; // Using the client or need a server admin client?
-// Ideally we should use a service role client if we are accessing restrictive data, 
-// but for reading the loan that just got created (and we passed the ID), standard client might work IF RLS allows.
-// To be safe, let's assume we need to join Loan + Profile.
-
+import { createClient } from '@supabase/supabase-js';
 import { sendAdminLoanAlert } from '@/app/actions/email';
 import { requireAdmin } from '@/lib/require-admin';
+
+export const dynamic = 'force-dynamic';
 
 export async function POST(req: NextRequest) {
     // AUTH CHECK
@@ -14,6 +12,11 @@ export async function POST(req: NextRequest) {
     if (auth instanceof NextResponse) return auth;
 
     try {
+        const supabase = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+
         const { loanId } = await req.json();
 
         if (!loanId) {
