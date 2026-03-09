@@ -69,7 +69,7 @@ type AuditLog = {
 }
 
 export default function VerificationPage() {
-    const { user, isLoading: authLoading } = useAuth()
+    const { user, session, isLoading: authLoading } = useAuth()
     const router = useRouter()
     const [queue, setQueue] = useState<VerificationItem[]>([])
     const [loading, setLoading] = useState(true)
@@ -98,7 +98,7 @@ export default function VerificationPage() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                    ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
                 },
                 body: JSON.stringify({ loanId: item.loan_id })
             });
@@ -194,7 +194,7 @@ export default function VerificationPage() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                    ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
                 },
                 body: JSON.stringify({ loanId: item.loan_id, reason, type })
             })
@@ -261,10 +261,10 @@ export default function VerificationPage() {
         setLoading(true)
         setError(null)
         try {
-            const session = (await supabase.auth.getSession()).data.session;
+            const token = session?.access_token;
             const res = await fetch('/api/admin/verification-queue', {
                 headers: {
-                    'Authorization': `Bearer ${session?.access_token}`
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 }
             })
 
@@ -419,12 +419,11 @@ export default function VerificationPage() {
         if (!confirm(`Are you sure you want to REJECT this application?\nReason: ${reason}\n\nThis will send a rejection email to the user.`)) return;
 
         try {
-            const session = (await supabase.auth.getSession()).data.session;
             const res = await fetch('/api/admin/status-update', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${session?.access_token}`
+                    ...(session?.access_token ? { 'Authorization': `Bearer ${session.access_token}` } : {})
                 },
                 body: JSON.stringify({ loanId: item.loan_id, status: 'rejected', reason })
             });

@@ -23,7 +23,7 @@ type UserProfile = {
 }
 
 export default function AdminUsersPage() {
-    const { user, isLoading } = useAuth()
+    const { user, session, isLoading } = useAuth()
     const router = useRouter()
     const [users, setUsers] = useState<UserProfile[]>([])
     const [loadingData, setLoadingData] = useState(true)
@@ -41,10 +41,10 @@ export default function AdminUsersPage() {
 
     const fetchUsers = async () => {
         try {
-            const session = (await supabase.auth.getSession()).data.session;
+            const token = session?.access_token;
             const res = await fetch('/api/admin/users', {
                 headers: {
-                    'Authorization': `Bearer ${session?.access_token}`
+                    ...(token ? { 'Authorization': `Bearer ${token}` } : {})
                 }
             });
 

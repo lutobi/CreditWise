@@ -12,6 +12,7 @@
  */
 
 import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { NextResponse, type NextRequest } from 'next/server'
 
@@ -26,36 +27,40 @@ export async function requireAdmin(
     request?: NextRequest | Request
 ): Promise<AdminAuth | NextResponse> {
     try {
-        const cookieStore = await cookies()
-        const authClient = createServerClient(
-            process.env.NEXT_PUBLIC_SUPABASE_URL!,
-            process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-            {
-                cookies: {
-                    getAll() { return cookieStore.getAll() },
-                    setAll() { /* read-only */ }
+        let session: any = null;
+
+        // 1. Try cookie-based session (SSR / same-origin navigation)
+        try {
+            const cookieStore = await cookies()
+            const authClient = createServerClient(
+                process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+                {
+                    cookies: {
+                        getAll() { return cookieStore.getAll() },
+                        setAll() { /* read-only */ }
+                    }
                 }
-            }
-        )
+            )
+            const { data: { session: cookieSession } } = await authClient.auth.getSession()
+            session = cookieSession
+        } catch (e) {
+            // cookies() can throw in some edge cases, that's fine — we'll try the header
+        }
 
-        // 1. Try cookie-based session
-        const { data: { session: cookieSession } } = await authClient.auth.getSession()
-        let session = cookieSession
-
-        // 2. Failover: Authorization header (for programmatic callers)
+        // 2. Failover: Authorization header (client-side fetch with Bearer token)
+        //    Uses the SERVICE ROLE key so getUser() always works reliably
         if (!session && request) {
             const authHeader = request.headers.get('Authorization')
             const token = authHeader?.split(' ')[1]
 
-            if (token === 'mock-token' && process.env.NEXT_PUBLIC_ALLOW_MOCK_AUTH === 'true') {
-                session = {
-                    user: { id: 'mock-admin', email: 'admin@example.com', app_metadata: { role: 'super_admin' } },
-                    access_token: token
-                } as any
-            } else if (token) {
-                const { data: { user }, error } = await authClient.auth.getUser(token)
+            if (token) {
+                const serviceClient = createClient(
+                    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+                    process.env.SUPABASE_SERVICE_ROLE_KEY!
+                )
+                const { data: { user }, error } = await serviceClient.auth.getUser(token)
                 if (user && !error) {
-                    // @ts-ignore - Construct minimal session
                     session = { user, access_token: token }
                 }
             }
@@ -81,7 +86,7 @@ export async function requireAdmin(
             )
         }
 
-        return { session: session as any, role }
+        return { session, role }
     } catch (error: any) {
         console.error('[Auth] requireAdmin error:', error)
         return NextResponse.json(
