@@ -3,11 +3,14 @@ import { createClient } from '@supabase/supabase-js'
 import { NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/require-admin'
 
-// Use Service Role for Admin Management
-const supabaseAdmin = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
+export const dynamic = 'force-dynamic';
+
+function getSupabaseAdmin() {
+    return createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+}
 
 export async function GET(request: Request) {
     // AUTH CHECK
@@ -17,7 +20,7 @@ export async function GET(request: Request) {
     // List all users and filter by role in app_metadata
     // Note: listUsers is paginated. For now we fetch first 50.
     try {
-        const { data: { users }, error } = await supabaseAdmin.auth.admin.listUsers({
+        const { data: { users }, error } = await getSupabaseAdmin().auth.admin.listUsers({
             perPage: 100
         })
 
@@ -47,12 +50,12 @@ export async function POST(request: Request) {
         const { email, role } = await request.json()
 
         // 1. Check if user exists
-        const { data: { users } } = await supabaseAdmin.auth.admin.listUsers()
+        const { data: { users } } = await getSupabaseAdmin().auth.admin.listUsers()
         const existingUser = users.find(u => u.email === email)
 
         if (existingUser) {
             // Update Role
-            const { error } = await supabaseAdmin.auth.admin.updateUserById(
+            const { error } = await getSupabaseAdmin().auth.admin.updateUserById(
                 existingUser.id,
                 { app_metadata: { role } }
             )
@@ -63,7 +66,7 @@ export async function POST(request: Request) {
             // Ideally use inviteUserByEmail but that requires SMTP setup.
             // For MVP, we create user with temp password? Or just fail.
             // Let's use inviteUserByEmail assuming Supabase default SMTP works.
-            const { error } = await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
+            const { error } = await getSupabaseAdmin().auth.admin.inviteUserByEmail(email, {
                 data: { role } // Request data, but metadata must be set on update usually? 
                 // Actually invite accepts data which goes to user_metadata. app_metadata is harder on invite.
             })

@@ -6,10 +6,8 @@ import { validateCSRF } from '@/lib/csrf';
 import { documentRequestSchema } from '@/lib/validation';
 import { requireAdmin } from '@/lib/require-admin';
 
-// Initialize Admin Client
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY!
-const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey)
+export const dynamic = 'force-dynamic';
+
 
 export async function POST(request: Request) {
     // 0. CSRF Protection
@@ -23,6 +21,11 @@ export async function POST(request: Request) {
     if (auth instanceof NextResponse) return auth;
 
     try {
+        const supabaseAdmin = createClient(
+            process.env.NEXT_PUBLIC_SUPABASE_URL!,
+            process.env.SUPABASE_SERVICE_ROLE_KEY!
+        );
+
         const rawBody = await request.json();
         const validation = documentRequestSchema.safeParse(rawBody);
 
@@ -36,21 +39,12 @@ export async function POST(request: Request) {
 
         const { url } = validation.data;
 
-        // Extract path from full URL
-        // Expected URL: https://[project].supabase.co/storage/v1/object/public/documents/[user_id]/[file]
-        // or just the path if stored relatively? 
-        // Based on ApplyPage, we store publicUrl.
-
         let path = url;
         if (url.startsWith('http')) {
-            // Split by 'documents/' and get the rest
             const parts = url.split('/documents/')
             if (parts.length > 1) {
                 path = parts[1]
             } else {
-                // Try parsing URL to find path relative to bucket
-                // This is a bit tricky if format varies. 
-                // Let's assume standard Supabase storage URL format.
                 return NextResponse.json({ error: 'Invalid URL format' }, { status: 400 })
             }
         }
@@ -58,7 +52,7 @@ export async function POST(request: Request) {
         // Generate Signed URL (valid for 1 hour)
         const { data, error } = await supabaseAdmin
             .storage
-            .from('documents') // Assuming bucket name
+            .from('documents')
             .createSignedUrl(path, 3600)
 
         if (error) throw error
