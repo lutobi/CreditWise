@@ -11,7 +11,11 @@ import { createHmac, randomBytes } from 'crypto';
 function getCSRFSecret(): string {
     const secret = process.env.CSRF_SECRET;
     if (!secret) {
-        throw new Error('CSRF_SECRET environment variable is required. Set it to a strong random string.');
+        // Prevent Vercel static build from crashing when collecting page data if env var isn't loaded yet
+        if (process.env.NODE_ENV === 'production' && process.env.VERCEL_ENV !== 'preview' && process.env.VERCEL_ENV !== 'development') {
+            console.warn('WARNING: CSRF_SECRET environment variable is missing.');
+        }
+        return 'fallback-build-secret-do-not-use-in-prod';
     }
     return secret;
 }

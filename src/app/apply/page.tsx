@@ -21,6 +21,7 @@ import {
     documentUploadSchema,
     declarationSchema
 } from "@/lib/validation"
+import { FastTrackWizard } from "@/components/apply/fast-track-wizard"
 import { LiveSelfie } from "@/components/ui/live-selfie"
 import { toast } from "sonner"
 import { sendAdminLoanAlert } from "@/app/actions/email"
@@ -38,6 +39,7 @@ export default function ApplyPage() {
     const [existingLoanId, setExistingLoanId] = React.useState<string | null>(null)
     const [capturedSelfiePreview, setCapturedSelfiePreview] = React.useState<string | null>(null)
     const [showPrefillPrompt, setShowPrefillPrompt] = React.useState(false)
+    const [useFastTrack, setUseFastTrack] = React.useState(false)
     const [previousLoanData, setPreviousLoanData] = React.useState<any>(null)
 
     // Form State
@@ -262,10 +264,11 @@ export default function ApplyPage() {
         }
     }
 
-    const handleDocumentAnalysis = async (file: File) => {
+    const handleDocumentAnalysis = async (file: File, documentType: string) => {
         try {
             const formData = new FormData();
             formData.append('file', file);
+            formData.append('documentType', documentType);
 
             const result = await fetch('/api/analyze-statement', {
                 method: 'POST',
@@ -274,9 +277,9 @@ export default function ApplyPage() {
             const data = await result.json();
 
             if (data.success) {
-                console.log("Statement Analysis:", data);
+                console.log(`${documentType} Analysis:`, data);
                 updateField('verificationData', data);
-                toast.success(`Bank Statement Verified. Estimated Income: ${formatCurrency(data.estimatedIncome)}`);
+                toast.success(`${documentType === 'payslip' ? 'Payslip' : 'Bank Statement'} Verified. Estimated Income: ${formatCurrency(data.estimatedIncome)}`);
             }
         } catch (e) {
             console.error("Analysis Failed", e);
@@ -308,7 +311,10 @@ export default function ApplyPage() {
 
             // Trigger Analysis for Payslip/Statement
             if (fieldName === 'payslip') {
-                handleDocumentAnalysis(file);
+                handleDocumentAnalysis(file, 'payslip');
+            } else if (fieldName === 'recentPayslip') {
+                // Determine type based on your business logic; usually recentPayslip is the 3-mon statement in this UI context
+                handleDocumentAnalysis(file, 'bank_statement');
             }
 
             toast.success("Document uploaded successfully")
@@ -473,6 +479,30 @@ export default function ApplyPage() {
         }
     }
 
+    const handleFastTrackSubmit = async (fastTrackData: any) => {
+        try {
+            if (!user) throw new Error("Not authenticated");
+            const response = await fetch('/api/loans/submit', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                },
+                body: JSON.stringify(fastTrackData)
+            });
+            const result = await response.json();
+            if (!result.success) throw new Error(result.error || "Submission failed");
+
+            setStep(8);
+            setUseFastTrack(false);
+            toast.success("Fast-Track Application submitted successfully!");
+            localStorage.removeItem('nomad_loan_draft');
+        } catch (error: any) {
+            console.error('Fast-Track Submission Error:', error);
+            toast.error("Application failed: " + error.message);
+        }
+    };
+
     const steps = [
         "Personal Details",
         "Employment & Income",
@@ -600,107 +630,114 @@ export default function ApplyPage() {
             </div>
 
             {/* Return User Pre-fill Prompt (Only on Step 1) */}
-            {step === 1 && showPrefillPrompt && (
-                <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between animate-in slide-in-from-top-2">
+            {step === 1 && showPrefillPrompt && !useFastTrack && (
+                <div className="mb-6 bg-omari/10 border border-omari/20 rounded-lg p-4 flex items-center justify-between animate-in slide-in-from-top-2">
                     <div className="flex gap-3 items-center">
-                        <div className="bg-blue-100 p-2 rounded-full">
-                            <CheckCircle2 className="w-5 h-5 text-blue-600" />
+                        <div className="bg-omari/20 p-2 rounded-full">
+                            <span className="text-xl">⚡</span>
                         </div>
                         <div>
-                            <h4 className="text-sm font-semibold text-blue-900">Welcome back, {previousLoanData?.firstName}!</h4>
-                            <p className="text-xs text-blue-700">Would you like to use details from your last application?</p>
+                            <h4 className="text-sm font-semibold text-omari-900 dark:text-omari-100">Welcome back, {previousLoanData?.firstName}!</h4>
+                            <p className="text-xs text-omari-800 dark:text-omari-200/80">You qualify for a 1-Click Fast-Track loan. Apply in 45 seconds.</p>
                         </div>
                     </div>
                     <div className="flex gap-2">
-                        <Button size="sm" variant="ghost" className="text-blue-700 hover:bg-blue-100" onClick={() => setShowPrefillPrompt(false)}>No, thanks</Button>
-                        <Button size="sm" className="bg-blue-600 hover:bg-blue-700 text-white" onClick={applyPrefill}>Yes, Pre-fill</Button>
+                        <Button size="sm" variant="ghost" className="text-omari-800 dark:text-omari-200" onClick={() => setShowPrefillPrompt(false)}>Standard Application</Button>
+                        <Button size="sm" className="bg-omari hover:bg-omari-dark text-white" onClick={() => { setShowPrefillPrompt(false); setUseFastTrack(true); }}>Use Fast-Track</Button>
                     </div>
                 </div>
             )}
 
-            <Card className={errors && Object.keys(errors).length > 0 ? "border-red-300 shadow-sm" : ""}>
-                <CardHeader>
-                    <CardTitle>{steps[step - 1]}</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4 py-4">
-                    {/* Step 1: Personal */}
-                    {step === 1 && (
-                        <div className="grid gap-4 md:grid-cols-2">
-                            <FormInput label="First Name" name="firstName" placeholder="e.g. John" value={formData.firstName} onChange={updateField} error={errors.firstName} autoComplete="given-name" />
-                            <FormInput label="Last Name" name="lastName" placeholder="e.g. Doe" value={formData.lastName} onChange={updateField} error={errors.lastName} autoComplete="family-name" />
-                            <FormInput label="ID Number" name="nationalId" placeholder="e.g. 90010100123" value={formData.nationalId} onChange={updateField} error={errors.nationalId} />
-                            <FormInput label="Date of Birth" type="date" name="dob" value={formData.dob} onChange={updateField} error={errors.dob} autoComplete="bday" />
-                            <FormSelect label="Gender" name="gender" options={["Male", "Female", "Other"]} value={formData.gender} onChange={updateField} />
-                            <FormInput label="Nationality" name="nationality" placeholder="e.g. Namibian" value={formData.nationality} onChange={updateField} error={errors.nationality} autoComplete="country-name" />
-                            <FormSelect label="Marital Status" name="maritalStatus" options={["Single", "Married", "Divorced", "Widowed", "Separated"]} value={formData.maritalStatus} onChange={updateField} />
-                            <FormInput label="Mobile Number" name="phone" placeholder="e.g. 081 123 4567" value={formData.phone} onChange={updateField} error={errors.phone} autoComplete="tel" />
-                            <FormInput label="Alt Contact" name="altPhone" placeholder="e.g. 081 234 5678" value={formData.altPhone} onChange={updateField} error={errors.altPhone} autoComplete="tel" />
-                            <FormInput label="Email" name="email" type="email" placeholder="john@example.com" value={formData.email} onChange={updateField} error={errors.email} autoComplete="email" />
-                            <div className="col-span-2">
-                                <FormInput label="Residential Address" name="address" placeholder="Erf 123, Street Name, Windhoek" value={formData.address} onChange={updateField} error={errors.address} autoComplete="street-address" />
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Step 2: Employment */}
-                    {step === 2 && (
-                        <div className="grid gap-4 md:grid-cols-2">
-                            <FormInput label="Employer Name" name="employerName" placeholder="e.g. Government of Namibia" value={formData.employerName} onChange={updateField} error={errors.employerName} autoComplete="organization" />
-                            <FormInput label="Job Title" name="jobTitle" placeholder="e.g. Teacher" value={formData.jobTitle} onChange={updateField} error={errors.jobTitle} autoComplete="organization-title" />
-                            <FormInput label="Employer Contact" name="employerPhone" placeholder="e.g. 061 123 456 or 081..." value={formData.employerPhone} onChange={updateField} error={errors.employerPhone} autoComplete="tel-work" />
-                            <FormInput label="Start Date" type="date" name="employmentStartDate" value={formData.employmentStartDate} onChange={updateField} error={errors.employmentStartDate} />
-                            <FormSelect label="Employment Type" name="employmentType" options={["Permanent", "Contract", "Temporary", "Government"]} value={formData.employmentType} onChange={updateField} />
-                            <FormInput label="Monthly Income (N$)" type="number" name="monthlyIncome" placeholder="e.g. 15000" value={formData.monthlyIncome} onChange={updateField} error={errors.monthlyIncome} />
-
-                            <div className="col-span-2 mt-4 pt-4 border-t">
-                                <h4 className="font-semibold mb-2 text-sm text-primary">HR Representative Details</h4>
-                                <div className="grid gap-4 md:grid-cols-3">
-                                    <FormInput label="HR Name" name="hrName" placeholder="e.g. Jane Smith" value={formData.hrName} onChange={updateField} error={errors.hrName} />
-                                    <FormInput label="HR Email" name="hrEmail" type="email" placeholder="hr@company.com" value={formData.hrEmail} onChange={updateField} error={errors.hrEmail} />
-                                    <FormInput label="HR Phone" name="hrPhone" placeholder="e.g. 061... or 081..." value={formData.hrPhone} onChange={updateField} error={errors.hrPhone} />
+            {useFastTrack ? (
+                <FastTrackWizard
+                    previousData={previousLoanData}
+                    onSubmit={handleFastTrackSubmit}
+                    onCancel={() => { setUseFastTrack(false); setShowPrefillPrompt(true); }}
+                />
+            ) : (
+                <Card className={errors && Object.keys(errors).length > 0 ? "border-red-300 shadow-sm" : ""}>
+                    <CardHeader>
+                        <CardTitle>{steps[step - 1]}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-4 py-4">
+                        {/* Step 1: Personal */}
+                        {step === 1 && (
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <FormInput label="First Name" name="firstName" placeholder="e.g. John" value={formData.firstName} onChange={updateField} error={errors.firstName} autoComplete="given-name" />
+                                <FormInput label="Last Name" name="lastName" placeholder="e.g. Doe" value={formData.lastName} onChange={updateField} error={errors.lastName} autoComplete="family-name" />
+                                <FormInput label="ID Number" name="nationalId" placeholder="e.g. 90010100123" value={formData.nationalId} onChange={updateField} error={errors.nationalId} />
+                                <FormInput label="Date of Birth" type="date" name="dob" value={formData.dob} onChange={updateField} error={errors.dob} autoComplete="bday" />
+                                <FormSelect label="Gender" name="gender" options={["Male", "Female", "Other"]} value={formData.gender} onChange={updateField} />
+                                <FormInput label="Nationality" name="nationality" placeholder="e.g. Namibian" value={formData.nationality} onChange={updateField} error={errors.nationality} autoComplete="country-name" />
+                                <FormSelect label="Marital Status" name="maritalStatus" options={["Single", "Married", "Divorced", "Widowed", "Separated"]} value={formData.maritalStatus} onChange={updateField} />
+                                <FormInput label="Mobile Number" name="phone" placeholder="e.g. 081 123 4567" value={formData.phone} onChange={updateField} error={errors.phone} autoComplete="tel" />
+                                <FormInput label="Alt Contact" name="altPhone" placeholder="e.g. 081 234 5678" value={formData.altPhone} onChange={updateField} error={errors.altPhone} autoComplete="tel" />
+                                <FormInput label="Email" name="email" type="email" placeholder="john@example.com" value={formData.email} onChange={updateField} error={errors.email} autoComplete="email" />
+                                <div className="col-span-2">
+                                    <FormInput label="Residential Address" name="address" placeholder="Erf 123, Street Name, Windhoek" value={formData.address} onChange={updateField} error={errors.address} autoComplete="street-address" />
                                 </div>
                             </div>
-                        </div>
-                    )}
+                        )}
 
-                    {/* Step 3: Banking */}
-                    {step === 3 && (
-                        <div className="space-y-4">
-                            <div className="space-y-2">
-                                <label className="text-sm font-medium">Bank</label>
-                                <BankSelect
-                                    value={formData.bankName}
-                                    onChange={(bank) => {
-                                        updateField('bankName', bank.name)
-                                        updateField('branchCode', bank.branchCode)
-                                    }}
-                                />
-                                {errors.bankName && <p className="text-xs text-red-500 mt-1">{errors.bankName}</p>}
-                            </div>
-                            <FormInput label="Account Holder Name" name="accountHolder" placeholder="e.g. J Doe" value={formData.accountHolder} onChange={updateField} error={errors.accountHolder} />
-                            <FormInput label="Account Number" name="accountNumber" placeholder="e.g. 62123456789" value={formData.accountNumber} onChange={updateField} error={errors.accountNumber} />
-                            <FormSelect label="Account Type" name="accountType" options={["Savings", "Cheque/Current"]} value={formData.accountType} onChange={updateField} />
-                            <FormInput label="Branch Code" name="branchCode" placeholder="e.g. 280172" value={formData.branchCode} onChange={updateField} error={errors.branchCode} disabled={!!formData.bankName} />
+                        {/* Step 2: Employment */}
+                        {step === 2 && (
+                            <div className="grid gap-4 md:grid-cols-2">
+                                <FormInput label="Employer Name" name="employerName" placeholder="e.g. Government of Namibia" value={formData.employerName} onChange={updateField} error={errors.employerName} autoComplete="organization" />
+                                <FormInput label="Job Title" name="jobTitle" placeholder="e.g. Teacher" value={formData.jobTitle} onChange={updateField} error={errors.jobTitle} autoComplete="organization-title" />
+                                <FormInput label="Employer Contact" name="employerPhone" placeholder="e.g. 061 123 456 or 081..." value={formData.employerPhone} onChange={updateField} error={errors.employerPhone} autoComplete="tel-work" />
+                                <FormInput label="Start Date" type="date" name="employmentStartDate" value={formData.employmentStartDate} onChange={updateField} error={errors.employmentStartDate} />
+                                <FormSelect label="Employment Type" name="employmentType" options={["Permanent", "Contract", "Temporary", "Government"]} value={formData.employmentType} onChange={updateField} />
+                                <FormInput label="Monthly Income (N$)" type="number" name="monthlyIncome" placeholder="e.g. 15000" value={formData.monthlyIncome} onChange={updateField} error={errors.monthlyIncome} />
 
-                            {/* Bank Verification Status */}
-                            {formData.verificationData?.bankVerified && (
-                                <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
-                                    <CheckCircle2 className="w-5 h-5 text-green-600" />
-                                    <span className="text-sm text-green-700">Bank account verified successfully</span>
+                                <div className="col-span-2 mt-4 pt-4 border-t">
+                                    <h4 className="font-semibold mb-2 text-sm text-primary">HR Representative Details</h4>
+                                    <div className="grid gap-4 md:grid-cols-3">
+                                        <FormInput label="HR Name" name="hrName" placeholder="e.g. Jane Smith" value={formData.hrName} onChange={updateField} error={errors.hrName} />
+                                        <FormInput label="HR Email" name="hrEmail" type="email" placeholder="hr@company.com" value={formData.hrEmail} onChange={updateField} error={errors.hrEmail} />
+                                        <FormInput label="HR Phone" name="hrPhone" placeholder="e.g. 061... or 081..." value={formData.hrPhone} onChange={updateField} error={errors.hrPhone} />
+                                    </div>
                                 </div>
-                            )}
-                        </div>
-                    )}
+                            </div>
+                        )}
 
-
-                    {/* Step 4: Loan Details */}
-                    {
-                        step === 4 && (
-                            <div className="space-y-6">
-                                {/* Updated select handler to use handleLoanTypeChange */}
+                        {/* Step 3: Banking */}
+                        {step === 3 && (
+                            <div className="space-y-4">
                                 <div className="space-y-2">
-                                    <label className="text-sm font-medium">Loan Type</label>
-                                    {/* <select
+                                    <label className="text-sm font-medium">Bank</label>
+                                    <BankSelect
+                                        value={formData.bankName}
+                                        onChange={(bank) => {
+                                            updateField('bankName', bank.name)
+                                            updateField('branchCode', bank.branchCode)
+                                        }}
+                                    />
+                                    {errors.bankName && <p className="text-xs text-red-500 mt-1">{errors.bankName}</p>}
+                                </div>
+                                <FormInput label="Account Holder Name" name="accountHolder" placeholder="e.g. J Doe" value={formData.accountHolder} onChange={updateField} error={errors.accountHolder} />
+                                <FormInput label="Account Number" name="accountNumber" placeholder="e.g. 62123456789" value={formData.accountNumber} onChange={updateField} error={errors.accountNumber} />
+                                <FormSelect label="Account Type" name="accountType" options={["Savings", "Cheque/Current"]} value={formData.accountType} onChange={updateField} />
+                                <FormInput label="Branch Code" name="branchCode" placeholder="e.g. 280172" value={formData.branchCode} onChange={updateField} error={errors.branchCode} disabled={!!formData.bankName} />
+
+                                {/* Bank Verification Status */}
+                                {formData.verificationData?.bankVerified && (
+                                    <div className="flex items-center gap-2 p-3 bg-green-50 border border-green-200 rounded-lg">
+                                        <CheckCircle2 className="w-5 h-5 text-green-600" />
+                                        <span className="text-sm text-green-700">Bank account verified successfully</span>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+
+
+                        {/* Step 4: Loan Details */}
+                        {
+                            step === 4 && (
+                                <div className="space-y-6">
+                                    {/* Updated select handler to use handleLoanTypeChange */}
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Loan Type</label>
+                                        {/* <select
                     className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
                     value={formData.loanType}
                     onChange={(e) => handleLoanTypeChange(e.target.value)}
@@ -708,276 +745,277 @@ export default function ApplyPage() {
                     <option value="payday">Payday Loan (1 Month)</option>
                     <option value="term">Term Loan (3-36 Months)</option>
                 </select> */}
-                                    <div className="flex h-11 w-full items-center rounded-md border border-slate-300 bg-slate-100 px-3 text-sm text-slate-500 cursor-not-allowed">
-                                        Payday Loan (1 Month)
+                                        <div className="flex h-11 w-full items-center rounded-md border border-slate-300 bg-slate-100 px-3 text-sm text-slate-500 cursor-not-allowed">
+                                            Payday Loan (1 Month)
+                                        </div>
+                                    </div>
+
+
+                                    <div className="space-y-4">
+                                        <div className="flex justify-between items-end">
+                                            <label className="text-sm font-semibold leading-none text-slate-900">Loan Amount (N$)</label>
+                                            <input
+                                                type="number"
+                                                className="w-24 px-2 py-1 text-right text-lg font-bold border rounded-md"
+                                                value={formData.loanAmount}
+                                                onChange={(e) => {
+                                                    let val = parseInt(e.target.value) || 0;
+                                                    if (val > 50000) val = 50000;
+                                                    updateField('loanAmount', val);
+                                                }}
+                                                min="1000" max="50000"
+                                            />
+                                        </div>
+                                        <input type="range" name="loanAmount" min="1000" max="50000" step="50" className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary" value={formData.loanAmount} onChange={(e) => updateField('loanAmount', parseInt(e.target.value))} />
+                                        <div className="flex justify-between text-xs text-slate-400">
+                                            <span>N$ 1,000</span>
+                                            <span>N$ 50,000</span>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-semibold leading-none text-slate-900">Period: 1 Month</label>
+                                        <div className="flex gap-2">
+                                            <Button type="button" variant="outline" className="w-full md:w-auto border-slate-300 text-slate-500 bg-slate-50" disabled>1 Month (Fixed)</Button>
+                                        </div>
+                                    </div>
+
+                                    <FormInput label="Purpose of Loan" name="loanPurpose" placeholder="e.g. School Fees" value={formData.loanPurpose} onChange={updateField} error={errors.loanPurpose} />
+                                    <FormSelect label="Repayment Method" name="repaymentMethod" options={["Debit Order"]} value={formData.repaymentMethod} onChange={updateField} />
+                                </div >
+                            )
+                        }
+
+                        {/* Step 5: References */}
+                        {
+                            step === 5 && (
+                                <div className="space-y-4">
+                                    <h4 className="font-semibold mb-2 text-sm text-primary">Next of Kin Details</h4>
+                                    <FormInput label="Full Name" name="nextOfKinName" placeholder="e.g. Mary Doe" value={formData.nextOfKinName} onChange={updateField} error={errors.nextOfKinName} />
+                                    <FormInput label="Relationship" name="nextOfKinRelationship" placeholder="e.g. Mother" value={formData.nextOfKinRelationship} onChange={updateField} error={errors.nextOfKinRelationship} />
+                                    <FormInput label="Contact Number" name="nextOfKinContact" placeholder="e.g. 081 999 8888" value={formData.nextOfKinContact} onChange={updateField} error={errors.nextOfKinContact} />
+                                    <FormInput label="Physical Address" name="nextOfKinAddress" placeholder="e.g. Erf 456, Walvis Bay" value={formData.nextOfKinAddress} onChange={updateField} error={errors.nextOfKinAddress} />
+                                </div>
+                            )
+                        }
+
+                        {/* Step 6: Documents */}
+                        {
+                            step === 6 && (
+                                <div className="space-y-6">
+                                    {/* ID Upload */}
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">ID Document</label>
+                                        <div className="flex gap-4 items-center">
+                                            <Button type="button" variant="outline" className="relative w-full" disabled={uploading === 'idDocument'}>
+                                                {uploading === 'idDocument' ? <Spinner size="sm" className="mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                                                {formData.idDocument ? "Change File" : "Upload ID"}
+                                                <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileUpload(e, 'idDocument')} accept="image/*,.pdf" />
+                                            </Button>
+                                            {formData.idDocument && <CheckCircle2 className="text-green-500 h-6 w-6" />}
+                                        </div>
+                                        {/* Test Bypass Input */}
+                                        <input
+                                            type="text"
+                                            id="idDocument-bypass"
+                                            name="idDocument"
+                                            className="sr-only"
+                                            tabIndex={-1}
+                                            onChange={(e) => updateField('idDocument', e.target.value)}
+                                        />
+                                        {errors.idDocument && <p className="text-xs text-red-500">{errors.idDocument}</p>}
+                                    </div>
+
+                                    {/* Live Selfie */}
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Live Selfie</label>
+                                        {/* Test Bypass Input */}
+                                        <input
+                                            type="text"
+                                            id="selfie-bypass"
+                                            name="selfie"
+                                            className="sr-only"
+                                            tabIndex={-1}
+                                            onChange={(e) => updateField('selfie', e.target.value)}
+                                        />
+                                        <div className="border rounded-lg p-2 bg-muted/50">
+                                            {(!formData.selfie && !capturedSelfiePreview) ? (
+                                                <LiveSelfie onCapture={handleSelfieCapture} error={errors.selfie} />
+                                            ) : (
+                                                <div className="text-center">
+                                                    <div className="relative inline-block">
+                                                        <img
+                                                            src={capturedSelfiePreview || formData.selfie || ''}
+                                                            alt="Selfie"
+                                                            className="mx-auto h-32 w-32 object-cover rounded-full border-2 border-green-500 mb-2"
+                                                        />
+                                                        {uploading === 'selfie' && (
+                                                            <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
+                                                                <Spinner size="sm" className="text-white" />
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <p className="text-xs text-green-600 mb-1">
+                                                        {uploading === 'selfie' ? 'Uploading...' : '✓ Captured'}
+                                                    </p>
+                                                    <Button
+                                                        type="button"
+                                                        variant="ghost"
+                                                        size="sm"
+                                                        onClick={() => {
+                                                            updateField('selfie', '');
+                                                            setCapturedSelfiePreview(null);
+                                                        }}
+                                                        disabled={uploading === 'selfie'}
+                                                    >
+                                                        Retake
+                                                    </Button>
+                                                </div>
+                                            )}
+                                        </div>
+                                        {errors.selfie && <p className="text-xs text-red-500">{errors.selfie}</p>}
+                                    </div>
+
+                                    {/* Bank Statement (Renamed Label) */}
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Recent 3 Months Stamped Bank Statement (PDF)</label>
+                                        <div className="flex gap-4 items-center">
+                                            <Button type="button" variant="outline" className="relative w-full" disabled={uploading === 'payslip'}>
+                                                {uploading === 'payslip' ? <Spinner size="sm" className="mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                                                {formData.payslip ? "Change File" : "Upload Statement"}
+                                                <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileUpload(e, 'payslip')} accept="image/*,.pdf" />
+                                            </Button>
+                                            {formData.payslip && <CheckCircle2 className="text-green-500 h-6 w-6" />}
+                                        </div>
+                                        {/* Test Bypass Input */}
+                                        <input
+                                            type="text"
+                                            id="payslip-bypass"
+                                            name="payslip"
+                                            className="sr-only"
+                                            tabIndex={-1}
+                                            onChange={(e) => updateField('payslip', e.target.value)}
+                                        />
+                                        {errors.payslip && <p className="text-xs text-red-500">{errors.payslip}</p>}
+                                    </div>
+
+                                    {/* Most Recent Payslip (New Section) */}
+                                    <div className="space-y-2">
+                                        <label className="text-sm font-medium">Most Recent Payslip (PDF/Image)</label>
+                                        <div className="flex gap-4 items-center">
+                                            <Button type="button" variant="outline" className="relative w-full" disabled={uploading === 'recentPayslip'}>
+                                                {uploading === 'recentPayslip' ? <Spinner size="sm" className="mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
+                                                {formData.recentPayslip ? "Change File" : "Upload Payslip"}
+                                                <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileUpload(e, 'recentPayslip')} accept="image/*,.pdf" />
+                                            </Button>
+                                            {formData.recentPayslip && <CheckCircle2 className="text-green-500 h-6 w-6" />}
+                                        </div>
+                                        {/* Test Bypass Input */}
+                                        <input
+                                            type="text"
+                                            id="recentPayslip-bypass"
+                                            name="recentPayslip"
+                                            className="sr-only"
+                                            tabIndex={-1}
+                                            onChange={(e) => updateField('recentPayslip', e.target.value)}
+                                        />
+                                        {errors.recentPayslip && <p className="text-xs text-red-500">{errors.recentPayslip}</p>}
                                     </div>
                                 </div>
+                            )
+                        }
 
+                        {/* Step 7: Declarations */}
+                        {
+                            step === 7 && (
+                                <div className="space-y-6">
+                                    <div className="bg-card border border-border rounded-lg p-6 space-y-4">
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                                                <Scale className="h-4 w-4 text-primary" />
+                                            </div>
+                                            <h3 className="text-lg font-semibold text-slate-900">Legal Declaration & Consent</h3>
+                                        </div>
 
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-end">
-                                        <label className="text-sm font-semibold leading-none text-slate-900">Loan Amount (N$)</label>
-                                        <input
-                                            type="number"
-                                            className="w-24 px-2 py-1 text-right text-lg font-bold border rounded-md"
-                                            value={formData.loanAmount}
-                                            onChange={(e) => {
-                                                let val = parseInt(e.target.value) || 0;
-                                                if (val > 50000) val = 50000;
-                                                updateField('loanAmount', val);
-                                            }}
-                                            min="1000" max="50000"
+                                        <div className="bg-amber-50 border border-amber-200 rounded-md p-4 text-sm text-amber-900 mb-2">
+                                            <p className="font-bold mb-1">Mandatory Acknowledgement:</p>
+                                            <p>By proceeding, you explicitly acknowledge that the Loan Agreement has been completed in full <strong>prior to you applying your signature</strong>.</p>
+                                        </div>
+
+                                        <div className="h-48 overflow-y-auto pr-2 text-sm text-slate-600 space-y-3 pretty-scrollbar font-leading-relaxed">
+                                            <p><strong>1. Financial Terms:</strong> I understand that this is a short-term loan strictly limited to 1 month. The interest rate is fixed at 30%, and penalty interest of 5% per month applies to any arrears (capped at the capital amount).</p>
+                                            <p><strong>2. Affordability:</strong> I confirm that I have truthfully disclosed all my financial obligations and that I can afford the total repayment amount without experiencing financial hardship.</p>
+                                            <p><strong>3. Authority to Debit:</strong> I hereby authorize OMARI FINANCE to issue debit payment instructions against my bank account for the repayment amount. I understand that I am liable for any bank charges resulting from failed deductions due to insufficient funds.</p>
+                                            <p><strong>4. Truth & Accuracy:</strong> I declare that all information provided in this application is true and correct. I understand that providing false information constitutes fraud.</p>
+                                            <p><strong>5. Dispute Resolution:</strong> I have been informed of the internal complaint resolution procedures and my right to escalate unresolved complaints to NAMFISA.</p>
+                                        </div>
+                                    </div>
+
+                                    <div className="space-y-3 bg-card border border-border p-4 rounded-lg shadow-sm">
+                                        <Checkbox
+                                            label="I confirm the loan agreement was fully completed before I signed it, and I agree to the Terms & Conditions and Privacy Policy."
+                                            name="termsAccepted"
+                                            checked={formData.termsAccepted}
+                                            onChange={updateField}
+                                            error={errors.termsAccepted}
                                         />
                                     </div>
-                                    <input type="range" name="loanAmount" min="1000" max="50000" step="50" className="w-full h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary" value={formData.loanAmount} onChange={(e) => updateField('loanAmount', parseInt(e.target.value))} />
-                                    <div className="flex justify-between text-xs text-slate-400">
-                                        <span>N$ 1,000</span>
-                                        <span>N$ 50,000</span>
+
+                                    <div className="grid gap-6 md:grid-cols-2 pt-2">
+                                        <FormInput
+                                            label="Digital Signature (Type Full Name)"
+                                            name="signatureName"
+                                            placeholder="e.g. John Doe"
+                                            value={formData.signatureName}
+                                            onChange={updateField}
+                                            error={errors.signatureName}
+                                        />
+                                        <FormInput
+                                            label="Date"
+                                            type="date"
+                                            name="declarationDate"
+                                            value={formData.declarationDate}
+                                            onChange={updateField}
+                                            error={errors.declarationDate}
+                                        />
+                                    </div>
+
+                                    <div className="text-xs text-center text-zinc-400 mt-4">
+                                        By clicking "Submit Application", you legally sign this agreement.
                                     </div>
                                 </div>
+                            )
+                        }
 
-                                <div className="space-y-2">
-                                    <label className="text-sm font-semibold leading-none text-slate-900">Period: 1 Month</label>
-                                    <div className="flex gap-2">
-                                        <Button type="button" variant="outline" className="w-full md:w-auto border-slate-300 text-slate-500 bg-slate-50" disabled>1 Month (Fixed)</Button>
+                        {/* Step 8: Success */}
+                        {
+                            step === 8 && (
+                                <div className="text-center py-8">
+                                    <div className="mx-auto h-24 w-24 rounded-full bg-green-100 flex items-center justify-center mb-4">
+                                        <CheckCircle2 className="h-12 w-12 text-green-600" />
                                     </div>
+                                    <h2 className="text-2xl font-bold mb-2">Application Received!</h2>
+                                    <p className="text-muted-foreground mb-6">We will review your details and contact you shortly.</p>
+                                    <Link href="/dashboard"><Button size="lg">Go to Dashboard</Button></Link>
                                 </div>
+                            )
+                        }
 
-                                <FormInput label="Purpose of Loan" name="loanPurpose" placeholder="e.g. School Fees" value={formData.loanPurpose} onChange={updateField} error={errors.loanPurpose} />
-                                <FormSelect label="Repayment Method" name="repaymentMethod" options={["Debit Order"]} value={formData.repaymentMethod} onChange={updateField} />
-                            </div >
-                        )
-                    }
+                    </CardContent >
 
-                    {/* Step 5: References */}
                     {
-                        step === 5 && (
-                            <div className="space-y-4">
-                                <h4 className="font-semibold mb-2 text-sm text-primary">Next of Kin Details</h4>
-                                <FormInput label="Full Name" name="nextOfKinName" placeholder="e.g. Mary Doe" value={formData.nextOfKinName} onChange={updateField} error={errors.nextOfKinName} />
-                                <FormInput label="Relationship" name="nextOfKinRelationship" placeholder="e.g. Mother" value={formData.nextOfKinRelationship} onChange={updateField} error={errors.nextOfKinRelationship} />
-                                <FormInput label="Contact Number" name="nextOfKinContact" placeholder="e.g. 081 999 8888" value={formData.nextOfKinContact} onChange={updateField} error={errors.nextOfKinContact} />
-                                <FormInput label="Physical Address" name="nextOfKinAddress" placeholder="e.g. Erf 456, Walvis Bay" value={formData.nextOfKinAddress} onChange={updateField} error={errors.nextOfKinAddress} />
-                            </div>
+                        step < 8 && (
+                            <CardFooter className="flex justify-between">
+                                <Button type="button" variant="ghost" onClick={() => setStep(step - 1)} disabled={step === 1 || isLoading}>Back</Button>
+                                <Button onClick={handleNext} disabled={isLoading}>
+                                    {isLoading && <Spinner className="mr-2" size="sm" />}
+                                    {step === 7 ? "Submit Application" : "Next"}
+                                </Button>
+                            </CardFooter>
                         )
                     }
-
-                    {/* Step 6: Documents */}
-                    {
-                        step === 6 && (
-                            <div className="space-y-6">
-                                {/* ID Upload */}
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium">ID Document</label>
-                                    <div className="flex gap-4 items-center">
-                                        <Button type="button" variant="outline" className="relative w-full" disabled={uploading === 'idDocument'}>
-                                            {uploading === 'idDocument' ? <Spinner size="sm" className="mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                                            {formData.idDocument ? "Change File" : "Upload ID"}
-                                            <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileUpload(e, 'idDocument')} accept="image/*,.pdf" />
-                                        </Button>
-                                        {formData.idDocument && <CheckCircle2 className="text-green-500 h-6 w-6" />}
-                                    </div>
-                                    {/* Test Bypass Input */}
-                                    <input
-                                        type="text"
-                                        id="idDocument-bypass"
-                                        name="idDocument"
-                                        className="sr-only"
-                                        tabIndex={-1}
-                                        onChange={(e) => updateField('idDocument', e.target.value)}
-                                    />
-                                    {errors.idDocument && <p className="text-xs text-red-500">{errors.idDocument}</p>}
-                                </div>
-
-                                {/* Live Selfie */}
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium">Live Selfie</label>
-                                    {/* Test Bypass Input */}
-                                    <input
-                                        type="text"
-                                        id="selfie-bypass"
-                                        name="selfie"
-                                        className="sr-only"
-                                        tabIndex={-1}
-                                        onChange={(e) => updateField('selfie', e.target.value)}
-                                    />
-                                    <div className="border rounded-lg p-2 bg-muted/50">
-                                        {(!formData.selfie && !capturedSelfiePreview) ? (
-                                            <LiveSelfie onCapture={handleSelfieCapture} error={errors.selfie} />
-                                        ) : (
-                                            <div className="text-center">
-                                                <div className="relative inline-block">
-                                                    <img
-                                                        src={capturedSelfiePreview || formData.selfie || ''}
-                                                        alt="Selfie"
-                                                        className="mx-auto h-32 w-32 object-cover rounded-full border-2 border-green-500 mb-2"
-                                                    />
-                                                    {uploading === 'selfie' && (
-                                                        <div className="absolute inset-0 bg-black/50 rounded-full flex items-center justify-center">
-                                                            <Spinner size="sm" className="text-white" />
-                                                        </div>
-                                                    )}
-                                                </div>
-                                                <p className="text-xs text-green-600 mb-1">
-                                                    {uploading === 'selfie' ? 'Uploading...' : '✓ Captured'}
-                                                </p>
-                                                <Button
-                                                    type="button"
-                                                    variant="ghost"
-                                                    size="sm"
-                                                    onClick={() => {
-                                                        updateField('selfie', '');
-                                                        setCapturedSelfiePreview(null);
-                                                    }}
-                                                    disabled={uploading === 'selfie'}
-                                                >
-                                                    Retake
-                                                </Button>
-                                            </div>
-                                        )}
-                                    </div>
-                                    {errors.selfie && <p className="text-xs text-red-500">{errors.selfie}</p>}
-                                </div>
-
-                                {/* Bank Statement (Renamed Label) */}
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium">Recent 3 Months Stamped Bank Statement (PDF)</label>
-                                    <div className="flex gap-4 items-center">
-                                        <Button type="button" variant="outline" className="relative w-full" disabled={uploading === 'payslip'}>
-                                            {uploading === 'payslip' ? <Spinner size="sm" className="mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                                            {formData.payslip ? "Change File" : "Upload Statement"}
-                                            <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileUpload(e, 'payslip')} accept="image/*,.pdf" />
-                                        </Button>
-                                        {formData.payslip && <CheckCircle2 className="text-green-500 h-6 w-6" />}
-                                    </div>
-                                    {/* Test Bypass Input */}
-                                    <input
-                                        type="text"
-                                        id="payslip-bypass"
-                                        name="payslip"
-                                        className="sr-only"
-                                        tabIndex={-1}
-                                        onChange={(e) => updateField('payslip', e.target.value)}
-                                    />
-                                    {errors.payslip && <p className="text-xs text-red-500">{errors.payslip}</p>}
-                                </div>
-
-                                {/* Most Recent Payslip (New Section) */}
-                                <div className="space-y-2">
-                                    <label className="text-sm font-medium">Most Recent Payslip (PDF/Image)</label>
-                                    <div className="flex gap-4 items-center">
-                                        <Button type="button" variant="outline" className="relative w-full" disabled={uploading === 'recentPayslip'}>
-                                            {uploading === 'recentPayslip' ? <Spinner size="sm" className="mr-2" /> : <Upload className="h-4 w-4 mr-2" />}
-                                            {formData.recentPayslip ? "Change File" : "Upload Payslip"}
-                                            <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => handleFileUpload(e, 'recentPayslip')} accept="image/*,.pdf" />
-                                        </Button>
-                                        {formData.recentPayslip && <CheckCircle2 className="text-green-500 h-6 w-6" />}
-                                    </div>
-                                    {/* Test Bypass Input */}
-                                    <input
-                                        type="text"
-                                        id="recentPayslip-bypass"
-                                        name="recentPayslip"
-                                        className="sr-only"
-                                        tabIndex={-1}
-                                        onChange={(e) => updateField('recentPayslip', e.target.value)}
-                                    />
-                                    {errors.recentPayslip && <p className="text-xs text-red-500">{errors.recentPayslip}</p>}
-                                </div>
-                            </div>
-                        )
-                    }
-
-                    {/* Step 7: Declarations */}
-                    {
-                        step === 7 && (
-                            <div className="space-y-6">
-                                <div className="bg-card border border-border rounded-lg p-6 space-y-4">
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                                            <Scale className="h-4 w-4 text-primary" />
-                                        </div>
-                                        <h3 className="text-lg font-semibold text-slate-900">Legal Declaration & Consent</h3>
-                                    </div>
-
-                                    <div className="bg-amber-50 border border-amber-200 rounded-md p-4 text-sm text-amber-900 mb-2">
-                                        <p className="font-bold mb-1">Mandatory Acknowledgement:</p>
-                                        <p>By proceeding, you explicitly acknowledge that the Loan Agreement has been completed in full <strong>prior to you applying your signature</strong>.</p>
-                                    </div>
-
-                                    <div className="h-48 overflow-y-auto pr-2 text-sm text-slate-600 space-y-3 pretty-scrollbar font-leading-relaxed">
-                                        <p><strong>1. Financial Terms:</strong> I understand that this is a short-term loan strictly limited to 1 month. The interest rate is fixed at 30%, and penalty interest of 5% per month applies to any arrears (capped at the capital amount).</p>
-                                        <p><strong>2. Affordability:</strong> I confirm that I have truthfully disclosed all my financial obligations and that I can afford the total repayment amount without experiencing financial hardship.</p>
-                                        <p><strong>3. Authority to Debit:</strong> I hereby authorize OMARI FINANCE to issue debit payment instructions against my bank account for the repayment amount. I understand that I am liable for any bank charges resulting from failed deductions due to insufficient funds.</p>
-                                        <p><strong>4. Truth & Accuracy:</strong> I declare that all information provided in this application is true and correct. I understand that providing false information constitutes fraud.</p>
-                                        <p><strong>5. Dispute Resolution:</strong> I have been informed of the internal complaint resolution procedures and my right to escalate unresolved complaints to NAMFISA.</p>
-                                    </div>
-                                </div>
-
-                                <div className="space-y-3 bg-card border border-border p-4 rounded-lg shadow-sm">
-                                    <Checkbox
-                                        label="I confirm the loan agreement was fully completed before I signed it, and I agree to the Terms & Conditions and Privacy Policy."
-                                        name="termsAccepted"
-                                        checked={formData.termsAccepted}
-                                        onChange={updateField}
-                                        error={errors.termsAccepted}
-                                    />
-                                </div>
-
-                                <div className="grid gap-6 md:grid-cols-2 pt-2">
-                                    <FormInput
-                                        label="Digital Signature (Type Full Name)"
-                                        name="signatureName"
-                                        placeholder="e.g. John Doe"
-                                        value={formData.signatureName}
-                                        onChange={updateField}
-                                        error={errors.signatureName}
-                                    />
-                                    <FormInput
-                                        label="Date"
-                                        type="date"
-                                        name="declarationDate"
-                                        value={formData.declarationDate}
-                                        onChange={updateField}
-                                        error={errors.declarationDate}
-                                    />
-                                </div>
-
-                                <div className="text-xs text-center text-zinc-400 mt-4">
-                                    By clicking "Submit Application", you legally sign this agreement.
-                                </div>
-                            </div>
-                        )
-                    }
-
-                    {/* Step 8: Success */}
-                    {
-                        step === 8 && (
-                            <div className="text-center py-8">
-                                <div className="mx-auto h-24 w-24 rounded-full bg-green-100 flex items-center justify-center mb-4">
-                                    <CheckCircle2 className="h-12 w-12 text-green-600" />
-                                </div>
-                                <h2 className="text-2xl font-bold mb-2">Application Received!</h2>
-                                <p className="text-muted-foreground mb-6">We will review your details and contact you shortly.</p>
-                                <Link href="/dashboard"><Button size="lg">Go to Dashboard</Button></Link>
-                            </div>
-                        )
-                    }
-
-                </CardContent >
-
-                {
-                    step < 8 && (
-                        <CardFooter className="flex justify-between">
-                            <Button type="button" variant="ghost" onClick={() => setStep(step - 1)} disabled={step === 1 || isLoading}>Back</Button>
-                            <Button onClick={handleNext} disabled={isLoading}>
-                                {isLoading && <Spinner className="mr-2" size="sm" />}
-                                {step === 7 ? "Submit Application" : "Next"}
-                            </Button>
-                        </CardFooter>
-                    )
-                }
-            </Card >
+                </Card >
+            )}
 
             <Footer />
         </div >

@@ -85,7 +85,10 @@ export async function GET(req: Request) {
                 employer_name: v?.employer_name || l.application_data?.employerName || 'Unknown',
                 credit_score: v?.credit_score || 0,
                 verification_date: v?.updated_at || v?.created_at || '',
-                reference_id: l.application_data?.refId || 'N/A'
+                reference_id: l.application_data?.refId || 'N/A',
+                // AI Audit Data
+                ai_analysis: l.application_data?.verificationData || null,
+                risk_flags: l.application_data?.riskFlags || l.risk_flags || []
             };
         });
 

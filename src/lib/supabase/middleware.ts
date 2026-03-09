@@ -46,7 +46,7 @@ export async function updateSession(request: NextRequest) {
         const ip = request.headers.get('x-forwarded-for')?.split(',')[0] ||
             request.headers.get('x-real-ip') ||
             '0.0.0.0';
-        const fingerprint = Buffer.from(`${ua}:${ip}`).toString('base64');
+        const fingerprint = btoa(`${ua}:${ip}`);
 
         const existingFingerprint = request.cookies.get('__sb_fpt')?.value;
 

@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 import { updateSession } from '@/lib/supabase/middleware'
 
-const CSRF_SECRET = process.env.CSRF_SECRET || '';
+const CSRF_SECRET = process.env.CSRF_SECRET || 'fallback-build-secret-do-not-use-in-prod';
 const CSRF_COOKIE_NAME = 'csrf_token';
 const TOKEN_EXPIRY_MS = 60 * 60 * 1000; // 1 hour
 

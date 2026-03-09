@@ -51,17 +51,23 @@ export async function POST(req: NextRequest) {
 
         // 1.7 Zod Validation
         try {
-            personalDetailsSchema.parse(formData);
-            employmentDetailsSchema.parse(formData);
-            bankingDetailsSchema.parse(formData);
-            loanDetailsSchema.parse(formData);
-            referencesSchema.parse(formData);
-            // declarationSchema uses declarationDate and signatureName fields
-            declarationSchema.parse({
-                termsAccepted: formData.readTerms && formData.confirmTruth && formData.understandLegal && formData.consentAffordability && formData.consentVerification,
-                signatureName: formData.signatureName,
-                declarationDate: formData.declarationDate || new Date().toISOString()
-            });
+            if (!formData.isFastTrack) {
+                personalDetailsSchema.parse(formData);
+                employmentDetailsSchema.parse(formData);
+                bankingDetailsSchema.parse(formData);
+                loanDetailsSchema.parse(formData);
+                referencesSchema.parse(formData);
+                // declarationSchema uses declarationDate and signatureName fields
+                declarationSchema.parse({
+                    termsAccepted: formData.readTerms && formData.confirmTruth && formData.understandLegal && formData.consentAffordability && formData.consentVerification,
+                    signatureName: formData.signatureName,
+                    declarationDate: formData.declarationDate || new Date().toISOString()
+                });
+            } else {
+                if (!formData.loanAmount || !formData.recentPayslip || !formData.termsAccepted) {
+                    throw new Error("Missing required fast-track fields: loanAmount, recentPayslip, termsAccepted");
+                }
+            }
         } catch (validationError: any) {
             logger.warn('Loan submission validation failed', { error: validationError.errors });
             return NextResponse.json({
@@ -94,6 +100,9 @@ export async function POST(req: NextRequest) {
             .limit(1);
 
         const riskFlags: string[] = [];
+        let initialStatus = 'pending';
+        let statusVal = 'In Queue';
+
         if (history && history.length > 0) {
             const prev = typeof history[0].application_data === 'string'
                 ? JSON.parse(history[0].application_data)
@@ -108,6 +117,46 @@ export async function POST(req: NextRequest) {
                 }
             }
         }
+
+        if (formData.isFastTrack) {
+            // 2.6 Credit Bureau Desperation Check & Whitelist
+            const { creditBureau } = await import('@/lib/credit-bureau');
+            const bureauCheck = await creditBureau.checkRecentInquiries(formData.nationalId || 'UNKNOWN');
+
+            // Check whitelist/blacklist manually injected into profile
+            const { data: profileCheck } = await supabase.from('profiles').select('employment_status').eq('id', user.id).single();
+
+            if (profileCheck?.employment_status === 'Terminated') {
+                riskFlags.push('[Admin] User marked as Terminated. Fast-Track BLOCKED.');
+                initialStatus = 'rejected';
+                statusVal = 'Policy Block';
+            } else if (bureauCheck.spikeDetected) {
+                riskFlags.push(`[Compuscan] Desperation Spike Detected: ${bureauCheck.inquiriesLast7Days} recent inquiries`);
+                initialStatus = 'pending'; // Requires manual intervention
+                statusVal = 'Requires Manual Verification (Spike)';
+            } else {
+                riskFlags.push('[Fast-Track] Priority Express application.');
+                initialStatus = 'pending'; // Requires HR Verification, but goes to the top of the queue
+                statusVal = 'Express Verification (Priority)';
+            }
+        }
+
+        // 2.7 AI Income Discrepancy Check
+        if (formData.verificationData && formData.monthlyIncome) {
+            const statedIncome = parseFloat(String(formData.monthlyIncome));
+            const auditedIncome = parseFloat(String(formData.verificationData.estimatedIncome));
+
+            if (auditedIncome > 0) {
+                const diff = Math.abs(statedIncome - auditedIncome) / auditedIncome;
+                if (diff > 0.15) { // 15% discrepancy threshold
+                    riskFlags.push(`[Audit] Income Discrepancy: Stated N$${statedIncome} vs Audited N$${auditedIncome} (${(diff * 100).toFixed(1)}% diff)`);
+                }
+            } else if (statedIncome > 0 && formData.verificationData.incomeConfidence === 0) {
+                // If user claims income but AI found zero with high confidence of zero
+                riskFlags.push(`[Audit] No salary detected on statement (Stated N$${statedIncome})`);
+            }
+        }
+
         // 3. Upsert Profile
         const { error: profileError } = await supabase.from('profiles').upsert({
             id: user.id,
@@ -151,8 +200,11 @@ export async function POST(req: NextRequest) {
             monthly_payment: amount / formData.repaymentPeriod,
             interest_rate: 5,
             purpose: formData.loanPurpose,
-            status: 'pending',
-            application_data: applicationData
+            status: initialStatus,
+            application_data: {
+                ...applicationData,
+                status_val: statusVal
+            }
         }).select().single()
 
         if (loanError) throw loanError;

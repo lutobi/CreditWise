@@ -33,7 +33,7 @@ if (typeof global.ImageData === 'undefined') {
     global.ImageData = class ImageData { constructor() { } }
 }
 
-const pdf = require('pdf-parse');
+// pdf-parse loaded via require() inside handler for compatibility
 
 export async function POST(req: NextRequest) {
     // AUTH CHECK — require logged-in user
@@ -48,70 +48,128 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
+    let documentType = 'bank_statement';
     try {
         const formData = await req.formData();
         const file = formData.get('file') as File;
+        if (formData.get('documentType')) {
+            documentType = formData.get('documentType') as string;
+        }
 
         if (!file) {
-            return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+            return NextResponse.json({ error: 'No file provided' }, { status: 400 });
         }
 
-        // Convert File to Buffer
-        const arrayBuffer = await file.arrayBuffer();
-        const buffer = Buffer.from(arrayBuffer);
+        const buffer = Buffer.from(await file.arrayBuffer());
+        let text = '';
+        let metadataFraudFlags: string[] = [];
 
-        // Parse PDF
-        const data = await pdf(buffer);
-        const text = data.text;
+        // --- 0. Text Extraction & Metadata Analysis (PDF vs Image) ---
+        if (file.type === 'application/pdf') {
+            const pdf = require('pdf-parse');
+            const data = await pdf(buffer);
+            text = data.text;
 
-        // --- 1. Basic Income Detection Logic ---
-        // Look for lines containing "Salary", "Wages", "Payroll" and a number
-        // This is a naive heuristic for the MVP.
-        const lines = text.split('\n');
-        let calculatedIncome = 0;
-        let incomeCount = 0;
+            // Forensic PDF Metadata Check
+            if (data.info) {
+                const creator = data.info.Creator?.toLowerCase() || '';
+                const producer = data.info.Producer?.toLowerCase() || '';
+                const suspiciousTools = ['ilovepdf', 'sejda', 'photoshop', 'illustrator', 'coreldraw', 'pdf24'];
 
-        const incomeKeywords = ['SALARY', 'WAGES', 'PAYROLL', 'EARNINGS'];
-
-        for (const line of lines) {
-            const upperLine = line.toUpperCase();
-            // Check if line has a keyword
-            if (incomeKeywords.some(keyword => upperLine.includes(keyword))) {
-                // Try to extract a number from this line
-                // Regex to find currency-like numbers (e.g., 15000.00 or 15,000.00)
-                // Excluding year-like numbers (2023, 2024) if they appear alone
-                const matches = line.match(/\d{1,3}(,\d{3})*(\.\d{2})?/g);
-
-                if (matches) {
-                    for (const match of matches) {
-                        const amount = parseFloat(match.replace(/,/g, ''));
-                        // Filter out small amounts (e.g. fees) or dates (2024)
-                        if (amount > 1000 && amount < 1000000) {
-                            calculatedIncome += amount;
-                            incomeCount++;
-                            // Assume simplified monthly statement: usually 1 salary entry
-                            // If multiple, we sum them (e.g. bi-weekly).
-                        }
+                suspiciousTools.forEach(tool => {
+                    if (creator.includes(tool) || producer.includes(tool)) {
+                        metadataFraudFlags.push(`Suspicious PDF Editor Detected: ${tool}`);
                     }
-                }
+                });
             }
+        } else if (file.type.startsWith('image/')) {
+            const Tesseract = await import('tesseract.js');
+            const result = await Tesseract.recognize(buffer, 'eng');
+            text = result.data.text;
+        } else {
+            return NextResponse.json({ error: 'Unsupported file type. Please upload a PDF, JPG, or PNG.' }, { status: 400 });
         }
 
-        // --- 2. Identity Detection (Optional Stealth Check) ---
-        // We could look for the applicant's name in the header area.
-        // For MVP, we just return the income.
+        // --- 1. AI Analysis via Groq (Llama 3 70B) ---
+        const { default: OpenAI } = await import('openai');
 
-        const confidence = incomeCount > 0 ? 0.9 : 0.0;
+        const groq = new OpenAI({
+            apiKey: process.env.GROQ_API_KEY,
+            baseURL: "https://api.groq.com/openai/v1"
+        });
+
+        const bankStatementPrompt = `
+            You are a highly skilled forensic financial auditor for Omari Finance.
+            Your task is to thoroughly analyze this bank statement to extract the primary recurring monthly salary AND detect any signs of document tampering or fraud.
+            
+            Rules:
+            1. Look for recurring deposits tagged as SALARY, WAGES, PAYROLL, or names of major employers. Ignore peer-to-peer transfers.
+            2. PERFROM A MATHEMATICAL AUDIT: Verify that the transactions mathematically align with the daily running balances.
+            3. LOOK FOR TAMPERING: Flag any anomalous formatting, backwards dates, or suspicious duplicate transaction IDs that indicate a PDF text editor was used.
+            4. Return ONLY a valid JSON object matching this exact schema:
+               {
+                 "estimatedIncome": (number) The monthly salary amount (0 if none found),
+                 "employerName": (string) The name of the employer ("None" if none found),
+                 "confidenceScore": (number between 0 and 1) Your confidence in the income estimate,
+                 "fraudProbability": (number between 0 and 1) Probability that this document has been altered or faked,
+                 "fraudFlags": [(string)] Array of highly descriptive explanations of any suspicious findings. Explain exactly what the "core catch" is (e.g., "Mathematical Error: The deposit on Nov 15 does not correctly update the running balance", "Anomalous Formatting: The dates are out of chronological sequence"). Empty array if clean.
+               }
+            
+            Do not include any conversational text. Return only the JSON.
+        `;
+
+        const payslipPrompt = `
+            You are a highly skilled forensic financial auditor for Omari Finance.
+            Your task is to thoroughly analyze this payslip to extract the net monthly pay AND detect any signs of document tampering or fraud.
+            
+            Rules:
+            1. Find the final NET PAY, TAKE HOME PAY, or NET SALARY amount. Find the issuing Employer Name.
+            2. PERFORM A MATHEMATICAL AUDIT: Verify that (Gross Pay - Tax - Deductions) exactly equals Net Pay.
+            3. LOOK FOR TAMPERING: Flag generic template markers (e.g., "Your Company Name Here") or mathematically impossible figures.
+            4. Return ONLY a valid JSON object matching this exact schema:
+               {
+                 "estimatedIncome": (number) The Net Pay amount (0 if none found),
+                 "employerName": (string) The name of the employer ("None" if none found),
+                 "confidenceScore": (number between 0 and 1) Your confidence in the income estimate,
+                 "fraudProbability": (number between 0 and 1) Probability that this document has been altered or faked,
+                 "fraudFlags": [(string)] Array of highly descriptive explanations of any suspicious findings. Explain exactly what the "core catch" is (e.g., "Mathematical Error: Gross Pay (5000) minus Deductions (1000) does not equal the stated Net Pay of 4500", "Template Marker Found: The document contains generic placeholder text suggesting a downloaded template"). Empty array if clean.
+               }
+            
+            Do not include any conversational text. Return only the JSON.
+        `;
+
+        const systemPrompt = documentType === 'payslip' ? payslipPrompt : bankStatementPrompt;
+
+        const completion = await groq.chat.completions.create({
+            model: "llama3-70b-8192",
+            messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: `Analyze this ${documentType} text:\n\n${text.slice(0, 15000)}` } // Cap at 15k chars for token limits
+            ],
+            response_format: { type: "json_object" }
+        });
+
+        const aiResponse = JSON.parse(completion.choices[0].message.content || "{}");
+
+        // Merge AI Fraud Flags with Metadata Fraud Flags
+        const combinedFraudFlags = [...metadataFraudFlags, ...(aiResponse.fraudFlags || [])];
+        const combinedFraudProbability = metadataFraudFlags.length > 0 ?
+            Math.max(0.99, aiResponse.fraudProbability || 0) :
+            (aiResponse.fraudProbability || 0);
 
         return NextResponse.json({
             success: true,
-            estimatedIncome: calculatedIncome,
-            incomeConfidence: confidence,
-            verificationSource: 'pdf-parse-v1'
+            documentType: documentType,
+            estimatedIncome: aiResponse.estimatedIncome || 0,
+            employerName: aiResponse.employerName || "Unknown",
+            incomeConfidence: aiResponse.confidenceScore || 0,
+            fraudProbability: combinedFraudProbability,
+            fraudFlags: combinedFraudFlags,
+            verificationSource: `groq-llama3-70b-${file.type.startsWith('image/') ? 'ocr' : 'pdf'}`
         });
 
     } catch (error: any) {
-        console.error('PDF Parse Error:', error);
-        return NextResponse.json({ error: error.message || 'Failed to parse PDF' }, { status: 500 });
+        console.error(`${documentType || 'Document'} Analysis Error:`, error);
+        return NextResponse.json({ error: error.message || 'Failed to analyze document' }, { status: 500 });
     }
 }

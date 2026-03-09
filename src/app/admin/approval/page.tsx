@@ -26,6 +26,15 @@ type ApprovalItem = {
     credit_score: number
     verification_date: string
     reference_id?: string
+    ai_analysis?: {
+        estimatedIncome: number;
+        employerName: string;
+        incomeConfidence: number;
+        fraudProbability?: number;
+        fraudFlags?: string[];
+        verificationSource: string;
+    } | null;
+    risk_flags?: string[];
 }
 
 type CreditReport = {
@@ -343,6 +352,16 @@ export default function ApprovalPage() {
                                                         </span>
                                                     )}
                                                 </div>
+                                                {/* Risk Flags */}
+                                                {item.risk_flags && item.risk_flags.length > 0 && (
+                                                    <div className="mt-2 flex flex-wrap gap-1">
+                                                        {item.risk_flags.map((flag, idx) => (
+                                                            <span key={idx} className="bg-red-100 text-red-800 text-[10px] px-2 py-1 rounded border border-red-200 font-medium whitespace-nowrap">
+                                                                ⚠️ {flag}
+                                                            </span>
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                             <div className="text-right">
                                                 <div className="text-2xl font-bold text-slate-900">N$ {item.amount.toLocaleString()}</div>
@@ -363,6 +382,43 @@ export default function ApprovalPage() {
                                                 </span>
                                             </div>
                                         </div>
+
+                                        {/* AI Audit Panel */}
+                                        {item.ai_analysis && (
+                                            <div className="bg-blue-50/50 border border-blue-100 rounded-lg p-3">
+                                                <div className="flex items-center gap-2 mb-2">
+                                                    <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider">AI Insight</span>
+                                                    <h4 className="text-xs font-semibold text-blue-900">Bank Statement Audit</h4>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-2 text-xs">
+                                                    <div>
+                                                        <span className="text-blue-600/70 block uppercase">Est. Income</span>
+                                                        <span className="font-medium text-blue-900">N$ {item.ai_analysis.estimatedIncome?.toLocaleString() || '0'}</span>
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-blue-600/70 block uppercase">Confidence</span>
+                                                        <span className="font-medium text-blue-900">{((item.ai_analysis.incomeConfidence || 0) * 100).toFixed(0)}%</span>
+                                                    </div>
+                                                </div>
+
+                                                {/* FORENSIC FRAUD ALERT */}
+                                                {item.ai_analysis.fraudProbability && item.ai_analysis.fraudProbability > 0.3 && (
+                                                    <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded-md">
+                                                        <div className="flex items-center gap-1.5 mb-1.5">
+                                                            <AlertCircle className="w-3.5 h-3.5 text-red-600" />
+                                                            <span className="text-[10px] font-bold text-red-700 uppercase">Fraud Warning: {Math.round(item.ai_analysis.fraudProbability * 100)}%</span>
+                                                        </div>
+                                                        {item.ai_analysis.fraudFlags && item.ai_analysis.fraudFlags.length > 0 && (
+                                                            <ul className="list-disc pl-4 text-[10px] text-red-800 space-y-0.5">
+                                                                {item.ai_analysis.fraudFlags.map((flag, i) => (
+                                                                    <li key={i}>{flag}</li>
+                                                                ))}
+                                                            </ul>
+                                                        )}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
 
                                     {/* 3. Actions */}

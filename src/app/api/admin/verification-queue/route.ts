@@ -133,7 +133,10 @@ export async function GET(request: Request) {
                 kin_name: appData.nextOfKinName || 'N/A',
                 kin_relationship: appData.nextOfKinRelationship || 'N/A',
                 kin_contact: appData.nextOfKinContact || 'N/A',
-                kin_address: appData.nextOfKinAddress || 'N/A'
+                kin_address: appData.nextOfKinAddress || 'N/A',
+                // AI Audit Data
+                ai_analysis: appData.verificationData || null,
+                risk_flags: appData.riskFlags || []
             };
         });
 

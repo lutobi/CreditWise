@@ -49,6 +49,15 @@ type VerificationItem = {
     kin_relationship?: string
     kin_contact?: string
     kin_address?: string
+    ai_analysis?: {
+        estimatedIncome: number;
+        employerName: string;
+        incomeConfidence: number;
+        fraudProbability?: number;
+        fraudFlags?: string[];
+        verificationSource: string;
+    } | null;
+    risk_flags?: string[];
     inspected?: boolean // Added for UI state
 }
 
@@ -252,7 +261,12 @@ export default function VerificationPage() {
         setLoading(true)
         setError(null)
         try {
-            const res = await fetch('/api/admin/verification-queue')
+            const session = (await supabase.auth.getSession()).data.session;
+            const res = await fetch('/api/admin/verification-queue', {
+                headers: {
+                    'Authorization': `Bearer ${session?.access_token}`
+                }
+            })
 
             const contentType = res.headers.get("content-type")
             if (contentType && contentType.indexOf("application/json") === -1) {
@@ -665,6 +679,18 @@ export default function VerificationPage() {
                                                             </span>
                                                         )}
                                                     </div>
+
+                                                    {/* Risk Flags */}
+                                                    {item.risk_flags && item.risk_flags.length > 0 && (
+                                                        <div className="mt-2 flex flex-col gap-1">
+                                                            {item.risk_flags.map((flag, idx) => (
+                                                                <span key={idx} className="bg-red-100 text-red-800 text-[10px] px-2 py-1 rounded border border-red-200 font-medium">
+                                                                    ⚠️ {flag}
+                                                                </span>
+                                                            ))}
+                                                        </div>
+                                                    )}
+
                                                 </div>
                                                 <div className="flex flex-col gap-2 mt-4 text-right">
                                                     <Button variant="link" className="h-auto p-0 text-purple-600 justify-end" onClick={() => handleViewReport(item.national_id)}>
@@ -705,6 +731,55 @@ export default function VerificationPage() {
                                                     </div>
                                                 </div>
                                             </div>
+
+                                            {/* AI Audit Panel */}
+                                            {item.ai_analysis && (
+                                                <div className="mb-8 p-4 bg-blue-50/50 border border-blue-100 rounded-lg">
+                                                    <h4 className="text-sm font-semibold text-blue-900 mb-3 flex items-center gap-2">
+                                                        <span className="bg-blue-600 text-white text-[10px] px-2 py-0.5 rounded-full uppercase tracking-wider">AI Insight</span>
+                                                        Bank Statement Audit
+                                                    </h4>
+                                                    <div className="grid grid-cols-3 gap-4 text-sm">
+                                                        <div>
+                                                            <p className="text-xs text-blue-600/70 uppercase">Estimated Income</p>
+                                                            <p className="font-medium text-blue-900">
+                                                                N$ {item.ai_analysis.estimatedIncome?.toLocaleString() || '0'}
+                                                            </p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs text-blue-600/70 uppercase">Identified Employer</p>
+                                                            <p className="font-medium text-blue-900 truncate" title={item.ai_analysis.employerName}>
+                                                                {item.ai_analysis.employerName || 'None'}
+                                                            </p>
+                                                        </div>
+                                                        <div>
+                                                            <p className="text-xs text-blue-600/70 uppercase">AI Confidence</p>
+                                                            <p className="font-medium text-blue-900 border-b-2 inline-block border-blue-200">
+                                                                {((item.ai_analysis.incomeConfidence || 0) * 100).toFixed(0)}%
+                                                            </p>
+                                                        </div>
+                                                    </div>
+
+                                                    {/* FORENSIC FRAUD ALERT */}
+                                                    {item.ai_analysis.fraudProbability && item.ai_analysis.fraudProbability > 0.3 && (
+                                                        <div className="mt-4 p-3 bg-red-50 border border-red-200 rounded-md">
+                                                            <div className="flex items-center gap-2 mb-2">
+                                                                <AlertCircle className="w-4 h-4 text-red-600" />
+                                                                <h5 className="text-xs font-bold text-red-700 uppercase">Forensic Fraud Warning: {((item.ai_analysis.fraudProbability || 0) * 100).toFixed(0)}% Probability</h5>
+                                                            </div>
+                                                            {item.ai_analysis.fraudFlags && item.ai_analysis.fraudFlags.length > 0 ? (
+                                                                <ul className="list-disc pl-5 text-xs text-red-800 space-y-1">
+                                                                    {item.ai_analysis.fraudFlags.map((flag, i) => (
+                                                                        <li key={i}>{flag}</li>
+                                                                    ))}
+                                                                </ul>
+                                                            ) : (
+                                                                <p className="text-xs text-red-800">The AI detected mathematical anomalies or formatting artifacts suggesting this document was digitally altered.</p>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            )}
 
                                             {/* HR & Next of Kin Details */}
                                             <div className="grid grid-cols-2 gap-x-8 gap-y-4 mb-8 pt-4 border-t border-slate-100">

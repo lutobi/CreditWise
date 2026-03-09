@@ -15,10 +15,11 @@ type UserProfile = {
     created_at: string // In profiles table, usually updated_at is there. We might need joined_at or infer from created_at
     updated_at?: string
     full_name: string | null
-    email: string | null // We just added this
-    // Status can be inferred: if phone/address exist -> Profile Active. If loan exists -> Loan Active.
+    email: string | null
     phone_number?: string
     address?: string
+    userStatus?: string
+    statusColor?: string
 }
 
 export default function AdminUsersPage() {
@@ -40,20 +41,27 @@ export default function AdminUsersPage() {
 
     const fetchUsers = async () => {
         try {
-            // Fetch profiles.
-            // Note: 'created_at' might not exist on profiles if not added in schema.
-            // We'll use 'updated_at' or if 'created_at' exists.
-            // Let's assume standard 'created_at' exists on tables or we use 'updated_at' as proxy for "Last Active".
-            const { data, error } = await supabase
-                .from('profiles')
-                .select('*')
-                .order('updated_at', { ascending: false })
+            const session = (await supabase.auth.getSession()).data.session;
+            const res = await fetch('/api/admin/users', {
+                headers: {
+                    'Authorization': `Bearer ${session?.access_token}`
+                }
+            });
 
-            if (data) setUsers(data as UserProfile[])
+            if (!res.ok) {
+                throw new Error(`Failed to fetch: ${res.statusText}`);
+            }
+
+            const result = await res.json();
+            if (result.success) {
+                setUsers(result.data as UserProfile[]);
+            } else {
+                console.error("Error fetching users from API", result.error);
+            }
         } catch (e) {
-            console.error("Error fetching users", e)
+            console.error("Error fetching users", e);
         } finally {
-            setLoadingData(false)
+            setLoadingData(false);
         }
     }
 
@@ -133,15 +141,9 @@ export default function AdminUsersPage() {
                                                         </div>
                                                     </td>
                                                     <td className="p-4">
-                                                        {hasProfile ? (
-                                                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">
-                                                                <CheckCircle2 className="w-3 h-3" /> Profile Active
-                                                            </span>
-                                                        ) : (
-                                                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
-                                                                <Clock className="w-3 h-3" /> Registered
-                                                            </span>
-                                                        )}
+                                                        <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium bg-${profile.statusColor}-100 text-${profile.statusColor}-700`}>
+                                                            <CheckCircle2 className="w-3 h-3" /> {profile.userStatus || 'Registered'}
+                                                        </span>
                                                     </td>
                                                     <td className="p-4 text-slate-500">
                                                         {profile.updated_at ? new Date(profile.updated_at).toLocaleDateString() : '-'}

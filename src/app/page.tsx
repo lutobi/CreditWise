@@ -278,8 +278,8 @@ export default function Home() {
                 <div className="relative">
                   <div className="absolute inset-0 bg-gradient-to-r from-primary to-secondary rounded-3xl opacity-20 transform rotate-3"></div>
                   <img
-                    src="https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?q=80&w=2071&auto=format&fit=crop"
-                    alt="Happy customer using phone"
+                    src="/how-it-works-hero.png"
+                    alt="Happy African professional using phone"
                     className="relative rounded-3xl shadow-2xl w-full object-cover h-[500px]"
                   />
                 </div>
@@ -332,7 +332,7 @@ export default function Home() {
               Join thousands of Namibians who trust Omari Finance for their financial needs.
             </p>
             <Link href="/apply">
-              <Button size="lg" variant="secondary" className="text-lg px-8 font-bold">
+              <Button size="lg" className="text-lg px-8 font-extrabold bg-white hover:bg-white/90 text-primary shadow-[0_0_20px_rgba(255,255,255,0.2)] hover:shadow-[0_0_30px_rgba(255,255,255,0.4)] transition-all border-none">
                 Apply Now
               </Button>
             </Link>
