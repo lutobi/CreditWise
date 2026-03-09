@@ -4,6 +4,16 @@ import { requireAdmin } from '@/lib/require-admin';
 
 export const dynamic = 'force-dynamic';
 
+const STEP_NAMES: Record<number, string> = {
+    1: 'Personal Details',
+    2: 'Employment & Income',
+    3: 'Banking Details',
+    4: 'Loan Details',
+    5: 'References',
+    6: 'Documents',
+    7: 'Declaration',
+};
+
 export async function GET(request: Request) {
     const auth = await requireAdmin(request);
     if (auth instanceof NextResponse) return auth;
@@ -22,12 +32,16 @@ export async function GET(request: Request) {
 
         if (pError) throw pError;
 
-        // 2. Fetch auth users (to get emails)
+        // 2. Fetch auth users (to get emails + user_metadata for step tracking)
         const { data: authData, error: authError } = await supabase.auth.admin.listUsers();
         if (authError) throw authError;
 
-        const authMap = new Map();
-        authData.users.forEach(u => authMap.set(u.id, u.email));
+        const authMap = new Map<string, { email: string; step: number; stepDate: string | null }>();
+        authData.users.forEach(u => authMap.set(u.id, {
+            email: u.email || '',
+            step: u.user_metadata?.application_step || 0,
+            stepDate: u.user_metadata?.application_step_updated_at || null
+        }));
 
         // 3. Fetch loans (to determine drop-offs vs applicants)
         const { data: loans, error: lError } = await supabase
@@ -38,15 +52,16 @@ export async function GET(request: Request) {
 
         const loanMap = new Map();
         loans.forEach(l => {
-            // Keep the most relevant status
             if (!loanMap.has(l.user_id) || l.status === 'pending' || l.status === 'active') {
                 loanMap.set(l.user_id, l.status);
             }
         });
 
-        // 4. Combine data
+        // 4. Combine data with step-level drop-off info
         const enrichedProfiles = profiles?.map(p => {
-            const email = authMap.get(p.id) || null;
+            const authInfo = authMap.get(p.id);
+            const email = authInfo?.email || null;
+            const appStep = authInfo?.step || 0;
             const loanStatus = loanMap.get(p.id);
             let userStatus = 'Registered';
             let statusColor = 'yellow';
@@ -63,11 +78,16 @@ export async function GET(request: Request) {
             } else if (loanStatus === 'rejected') {
                 userStatus = 'Declined';
                 statusColor = 'red';
-            } else if (p.address || p.phone_number) {
-                userStatus = 'Profile Completed (No Loan)'; // Drop-off stage 2
+            } else if (appStep > 0) {
+                // User started the wizard but never submitted
+                const stepName = STEP_NAMES[appStep] || `Step ${appStep}`;
+                userStatus = `Drop-Off at Step ${appStep} (${stepName})`;
                 statusColor = 'amber';
+            } else if (p.address || p.phone_number) {
+                userStatus = 'Profile Only (Never Started Application)';
+                statusColor = 'slate';
             } else {
-                userStatus = 'Sign-Up Drop-Off'; // Drop-off stage 1
+                userStatus = 'Sign-Up Only';
                 statusColor = 'slate';
             }
 
@@ -75,7 +95,8 @@ export async function GET(request: Request) {
                 ...p,
                 email,
                 userStatus,
-                statusColor
+                statusColor,
+                applicationStep: appStep
             };
         });
 

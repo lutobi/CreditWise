@@ -421,10 +421,21 @@ export default function ApplyPage() {
         }
 
         if (step < 7) {
-            // Face Verification moved to Admin Portal
-            // Just proceed to next step
-            setStep(step + 1)
+            const nextStep = step + 1;
+            setStep(nextStep)
             setIsLoading(false)
+
+            // Fire-and-forget: track which step the user reached (for drop-off analytics)
+            if (user) {
+                fetch('/api/track-step', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                    },
+                    body: JSON.stringify({ step: nextStep })
+                }).catch(() => { }); // Silently ignore errors
+            }
             return
         }
 
