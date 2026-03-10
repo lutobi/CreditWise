@@ -25,13 +25,25 @@ export function LiveSelfie({ onCapture, error }: LiveSelfieProps) {
 
     const confirmPhoto = () => {
         if (imgSrc) {
-            // Convert base64 to File object
-            fetch(imgSrc)
-                .then(res => res.blob())
-                .then(blob => {
-                    const file = new File([blob], "live-selfie.jpg", { type: "image/jpeg" })
-                    onCapture(file)
-                })
+            try {
+                // Determine mime type and base64 data
+                const arr = imgSrc.split(',');
+                const mimeMatch = arr[0].match(/:(.*?);/);
+                const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+                const bstr = atob(arr[1]);
+                let n = bstr.length;
+                const u8arr = new Uint8Array(n);
+                while (n--) {
+                    u8arr[n] = bstr.charCodeAt(n);
+                }
+                const file = new File([u8arr], "live-selfie.jpg", { type: mime });
+                onCapture(file);
+            } catch (err) {
+                console.error("Failed to convert image data", err);
+                if (error) {
+                    // Try to notify the parent or log
+                }
+            }
         }
     }
 
