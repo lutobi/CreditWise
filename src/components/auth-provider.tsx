@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState } from 'react'
 import { User, Session } from '@supabase/supabase-js'
-import { supabase } from '@/lib/supabase'
+import { getSupabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 
 type AuthContextType = {
@@ -54,7 +54,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
         if (checkMockUser()) return;
 
-        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+        const { data: { subscription } } = getSupabase().auth.onAuthStateChange((_event, session) => {
             if (mounted) {
                 setSession(session)
                 setUser(session?.user ?? null)
@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             clearTimeout(idleTimer);
             idleTimer = setTimeout(async () => {
                 console.log("⚠️ Session timed out due to inactivity (20m)");
-                await supabase.auth.signOut();
+                await getSupabase().auth.signOut();
                 router.push('/login?reason=timeout');
             }, TIMEOUT_MS);
         };
@@ -95,7 +95,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }, [session?.user, router]);
 
     const signOut = async () => {
-        await supabase.auth.signOut()
+        await getSupabase().auth.signOut()
         router.push('/login')
     }
 
