@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
                 referencesSchema.parse(formData);
                 // declarationSchema uses declarationDate and signatureName fields
                 declarationSchema.parse({
-                    termsAccepted: formData.readTerms && formData.confirmTruth && formData.understandLegal && formData.consentAffordability && formData.consentVerification,
+                    termsAccepted: formData.termsAccepted,
                     signatureName: formData.signatureName,
                     declarationDate: formData.declarationDate || new Date().toISOString()
                 });
