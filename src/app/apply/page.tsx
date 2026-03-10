@@ -376,8 +376,19 @@ export default function ApplyPage() {
             console.log('Validation Errors:', JSON.stringify(err.errors, null, 2));
             console.log('FormData:', JSON.stringify(formData, null, 2));
             const fieldErrors: Record<string, string> = {}
-            if (err?.errors && Array.isArray(err.errors)) {
-                err.errors.forEach((error: any) => {
+            let parsedErrors = err?.errors;
+
+            // If err.errors is missing but err.message is a JSON string of errors (common with some Zod usages)
+            if (!parsedErrors && typeof err?.message === 'string' && err.message.trim().startsWith('[')) {
+                try {
+                    parsedErrors = JSON.parse(err.message);
+                } catch (e) {
+                    // Ignore JSON parse error
+                }
+            }
+
+            if (parsedErrors && Array.isArray(parsedErrors)) {
+                parsedErrors.forEach((error: any) => {
                     if (error.path && error.path[0]) {
                         fieldErrors[error.path[0]] = error.message
                     }
