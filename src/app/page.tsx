@@ -168,9 +168,9 @@ export default function Home() {
           <div className="container mx-auto px-4 md:px-6">
             <div className="grid gap-12 md:grid-cols-2 items-center">
               <div className="flex flex-col gap-6 animate-in slide-in-from-left-5 duration-700">
-                <div className="inline-flex items-center rounded-full border border-primary/20 bg-primary/10 px-3 py-1 text-sm font-medium text-primary w-fit">
-                  <span className="flex h-2 w-2 rounded-full bg-primary mr-2"></span>
-                  Now Live in Namibia
+                <div className="inline-flex items-center rounded-full border border-amber-400/30 bg-amber-50 px-3 py-1 text-sm font-semibold text-amber-700 w-fit">
+                  <span className="flex h-2 w-2 rounded-full bg-amber-500 mr-2 animate-pulse"></span>
+                  Coming Soon — Namibia
                 </div>
                 <h1 className="text-4xl font-extrabold tracking-tight lg:text-6xl text-foreground">
                   Unlock Your <span className="text-primary">Financial Potential</span>
