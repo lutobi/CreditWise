@@ -471,14 +471,16 @@ export default function ApplyPage() {
         try {
             if (!user) throw new Error("Not authenticated");
 
-            // Read CSRF token from cookie for double-submit pattern
-            const csrfToken = document.cookie
+            const csrfCookie = document.cookie
                 .split(';')
                 .map(c => c.trim())
                 .find(c => c.startsWith('csrf_token='))
                 ?.split('=')
                 .slice(1)
                 .join('=') || '';
+
+            // Next.js URL-encodes cookies containing colons. Decode it before sending.
+            const csrfToken = decodeURIComponent(csrfCookie);
 
             // We now submit via API to capture IP and User Agent for electronic signature traceability
             const response = await fetch('/api/loans/submit', {
