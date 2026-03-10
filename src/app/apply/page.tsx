@@ -11,7 +11,7 @@ import { Footer } from "@/components/footer"
 import { CheckCircle2, ChevronRight, Upload, AlertCircle, Scale } from "lucide-react"
 import { Spinner } from "@/components/ui/spinner"
 import { useAuth } from "@/components/auth-provider"
-import { supabase } from "@/lib/supabase"
+import { getSupabase } from "@/lib/supabase"
 import {
     personalDetailsSchema,
     employmentDetailsSchema,
@@ -122,7 +122,7 @@ export default function ApplyPage() {
         const checkExistingLoan = async () => {
             if (!user) return
 
-            const { data: loans, error } = await supabase
+            const { data: loans, error } = await getSupabase()
                 .from('loans')
                 .select('*')
                 .eq('user_id', user.id)
@@ -297,13 +297,13 @@ export default function ApplyPage() {
             const fileExt = file.name.split('.').pop()
             const fileName = `${user.id}/${fieldName}-${Date.now()}.${fileExt}`
 
-            const { error: uploadError } = await supabase.storage
+            const { error: uploadError } = await getSupabase().storage
                 .from('documents')
                 .upload(fileName, file)
 
             if (uploadError) throw uploadError
 
-            const { data: { publicUrl } } = supabase.storage
+            const { data: { publicUrl } } = getSupabase().storage
                 .from('documents')
                 .getPublicUrl(fileName)
 
@@ -337,13 +337,13 @@ export default function ApplyPage() {
         setUploading('selfie');
         try {
             const fileName = `${user.id}/selfie-${Date.now()}.jpg`;
-            const { error: uploadError } = await supabase.storage
+            const { error: uploadError } = await getSupabase().storage
                 .from('documents')
                 .upload(fileName, file);
 
             if (uploadError) throw uploadError;
 
-            const { data: { publicUrl } } = supabase.storage
+            const { data: { publicUrl } } = getSupabase().storage
                 .from('documents')
                 .getPublicUrl(fileName);
 
@@ -383,15 +383,27 @@ export default function ApplyPage() {
             }
             setErrors(fieldErrors)
 
-            // UX Improvement: Scroll to first error instead of generic toast
-            const firstErrorField = Object.keys(fieldErrors)[0];
-            if (firstErrorField) {
+            // UX Improvement: Show all errors clearly
+            const errorMessages = Object.entries(fieldErrors).map(([field, msg]) => {
+                const label = field.replace(/([A-Z])/g, ' $1').replace(/^./, s => s.toUpperCase());
+                return `${label}: ${msg}`;
+            });
+
+            if (errorMessages.length > 0) {
+                toast.error(
+                    errorMessages.length === 1
+                        ? errorMessages[0]
+                        : `Please fix ${errorMessages.length} issues:\n${errorMessages.join('\n')}`,
+                    { duration: 6000 }
+                );
+
+                // Scroll to first error field
+                const firstErrorField = Object.keys(fieldErrors)[0];
                 const element = document.getElementsByName(firstErrorField)[0];
                 if (element) {
                     element.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     element.focus();
                 }
-                toast.error(`Please check the ${firstErrorField.replace(/([A-Z])/g, ' $1').toLowerCase()} field.`);
             }
             return false
         }
@@ -431,7 +443,7 @@ export default function ApplyPage() {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                        'Authorization': `Bearer ${(await getSupabase().auth.getSession()).data.session?.access_token}`
                     },
                     body: JSON.stringify({ step: nextStep })
                 }).catch(() => { }); // Silently ignore errors
@@ -458,7 +470,7 @@ export default function ApplyPage() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+                    'Authorization': `Bearer ${(await getSupabase().auth.getSession()).data.session?.access_token}`,
                     'x-csrf-token': csrfToken,
                 },
                 body: JSON.stringify({
@@ -497,7 +509,7 @@ export default function ApplyPage() {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+                    'Authorization': `Bearer ${(await getSupabase().auth.getSession()).data.session?.access_token}`
                 },
                 body: JSON.stringify(fastTrackData)
             });
