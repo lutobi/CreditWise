@@ -242,11 +242,13 @@ export default function VerificationPage() {
             return
         }
 
+        if (!session?.access_token) return // Wait for session to be ready
+
         if (user.id) {
             checkAccess()
             fetchQueue()
         }
-    }, [user?.id, authLoading])
+    }, [user?.id, authLoading, session?.access_token])
 
     const checkAccess = () => {
         if (!user) return router.push('/login')

@@ -29,15 +29,20 @@ export default function AdminUsersPage() {
     const [loadingData, setLoadingData] = useState(true)
 
     useEffect(() => {
-        if (!isLoading) {
-            const role = user?.app_metadata?.role;
-            if (!user || (role !== 'admin' && role !== 'super_admin')) {
-                router.push('/admin'); // Redirect if not admin
-                return;
-            }
-            fetchUsers();
+        if (isLoading) return;
+        if (!user) {
+            router.push('/admin');
+            return;
         }
-    }, [user, isLoading, router])
+        const role = user?.app_metadata?.role;
+        if (role !== 'admin' && role !== 'super_admin') {
+            router.push('/admin');
+            return;
+        }
+        if (!session?.access_token) return; // Wait for session to be ready
+        fetchUsers();
+    }, [user, isLoading, router, session?.access_token])
+
 
     const fetchUsers = async () => {
         try {
