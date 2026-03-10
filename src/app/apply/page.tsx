@@ -376,9 +376,11 @@ export default function ApplyPage() {
             console.log('Validation Errors:', JSON.stringify(err.errors, null, 2));
             console.log('FormData:', JSON.stringify(formData, null, 2));
             const fieldErrors: Record<string, string> = {}
-            if (err && err.errors && Array.isArray(err.errors)) {
+            if (err?.errors && Array.isArray(err.errors)) {
                 err.errors.forEach((error: any) => {
-                    fieldErrors[error.path[0]] = error.message
+                    if (error.path && error.path[0]) {
+                        fieldErrors[error.path[0]] = error.message
+                    }
                 })
             }
             setErrors(fieldErrors)
@@ -404,6 +406,8 @@ export default function ApplyPage() {
                     element.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     element.focus();
                 }
+            } else {
+                toast.error(`Validation failed: ${err.message || "Please check your inputs."}`, { duration: 6000 });
             }
             return false
         }
