@@ -1,11 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js'
 
-const supabase = createClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!
-)
-
 type AuditAction =
     | 'VERIFICATION_PASSED'
     | 'RETAKE_REQUESTED'
@@ -26,6 +21,11 @@ type AuditAction =
     | 'RATE_LIMIT_EXCEEDED'
 
 export async function logAudit(loanId: string, action: AuditAction, details: any = {}, actorId?: string) {
+    const supabase = createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.SUPABASE_SERVICE_ROLE_KEY!
+    );
+
     try {
         console.log(`[AUDIT] ${action} for Loan ${loanId}`, details);
 

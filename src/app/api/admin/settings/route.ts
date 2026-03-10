@@ -1,7 +1,8 @@
-
 import { createClient } from "@supabase/supabase-js"; // Direct client for Service Role
 import { NextResponse } from "next/server";
 import { requireAdmin } from '@/lib/require-admin';
+
+export const dynamic = 'force-dynamic'
 
 export async function GET(request: Request) {
     // AUTH CHECK
